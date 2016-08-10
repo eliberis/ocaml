@@ -32,7 +32,7 @@ type type_mismatch =
   | Field_arity of Ident.t
   | Field_names of int * Ident.t * Ident.t
   | Field_missing of bool * Ident.t
-  | Record_representation of bool
+  | Record_representation of bool * [`Float | `Unboxed_field ]
   | Unboxed_representation of bool
   | Immediate
 

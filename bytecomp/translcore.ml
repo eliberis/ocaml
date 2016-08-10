@@ -556,6 +556,7 @@ let check_recursive_lambda idlist lam =
 
 exception Not_constant
 
+(* TODO: or it can be an unboxed record of constants *)
 let extract_constant = function
     Lconst sc -> sc
   | _ -> raise Not_constant
@@ -708,6 +709,45 @@ let rec transl_exp e =
   in
   if eval_once then transl_exp0 e else
   Translobj.oo_wrap e.exp_env true transl_exp0 e
+
+(* TODO el: n^2 if called on every element in turn, can continue from the prev result. *)
+and compute_field_position all_labels pos =
+  let acc = ref 0 in
+  Array.iteri (fun i def ->
+      if i < pos then acc := !acc + def.lbl_size
+  ) all_labels;
+  !acc
+
+and pointwise_block_copy ?(dst_offset=0) ?(src_offset=0) ~dst_id
+      ~src:src_expr size ~loc =
+  (* assert (size > 0); *)
+  let src_expr_id = Ident.create "src_expr" in
+  let ptr = maybe_pointer src_expr in
+  let copy_field i =
+    let get_field = Lprim(Pfield (src_offset + i), [Lvar src_expr_id], loc) in
+      Lprim(Psetfield(dst_offset + i, ptr, Assignment), (* TODO el: or initialisation? *)
+            [Lvar dst_id; get_field], loc)
+  in
+  let assignment_expr = ref (copy_field 0) in
+  for i = 1 to (size - 1) do
+    assignment_expr := Lsequence(!assignment_expr, copy_field i)
+  done;
+  Llet(Strict, Pgenval, src_expr_id, transl_exp src_expr, !assignment_expr)
+
+and list_init : 'a. int -> (int -> 'a) -> 'a list =
+  fun n f ->
+    let l = ref [] in
+    for i = 0 to (n - 1) do l := (f i) :: !l done;
+    List.rev !l
+
+and project_fields_into_a_record ?(src_offset=0) ~src:src_expr size ~loc =
+  let src_expr_id = Ident.create "src_expr" in
+  let fields = list_init size (fun i ->
+    Lprim(Pfield (src_offset + i), [Lvar src_expr_id], loc))
+  in
+  let shape = list_init size (fun _ -> Pgenval) in
+  Llet(Strict, Pgenval, src_expr_id, src_expr,
+       Lprim(Pmakeblock(0, Immutable, Some shape), fields, loc))
 
 and transl_exp0 e =
   match e.exp_desc with
@@ -893,25 +933,44 @@ and transl_exp0 e =
   | Texp_field(arg, _, lbl) ->
       let targ = transl_exp arg in
       begin match lbl.lbl_repres with
-          Record_regular | Record_inlined _ ->
-          Lprim (Pfield lbl.lbl_pos, [targ], e.exp_loc)
-        | Record_unboxed _ -> targ
-        | Record_float -> Lprim (Pfloatfield lbl.lbl_pos, [targ], e.exp_loc)
-        | Record_extension ->
-          Lprim (Pfield (lbl.lbl_pos + 1), [targ], e.exp_loc)
+      | Record_regular | Record_inlined _ ->
+        Lprim (Pfield lbl.lbl_pos, [targ], e.exp_loc)
+      | Record_with_unboxed_fields ->
+        let pos = compute_field_position lbl.lbl_all lbl.lbl_pos in
+        let unboxed = Builtin_attributes.has_unboxed lbl.lbl_attributes in
+        if not unboxed then Lprim (Pfield pos, [targ], e.exp_loc)
+        else project_fields_into_a_record
+               ~src:targ ~src_offset:pos
+               lbl.lbl_size ~loc:e.exp_loc
+      | Record_unboxed _ -> targ
+      | Record_float -> Lprim (Pfloatfield lbl.lbl_pos, [targ], e.exp_loc)
+      | Record_extension ->
+        Lprim (Pfield (lbl.lbl_pos + 1), [targ], e.exp_loc)
       end
   | Texp_setfield(arg, _, lbl, newval) ->
-      let access =
-        match lbl.lbl_repres with
-          Record_regular
-        | Record_inlined _ ->
-          Psetfield(lbl.lbl_pos, maybe_pointer newval, Assignment)
-        | Record_unboxed _ -> assert false
-        | Record_float -> Psetfloatfield (lbl.lbl_pos, Assignment)
-        | Record_extension ->
-          Psetfield (lbl.lbl_pos + 1, maybe_pointer newval, Assignment)
-      in
+    let set_arg_field access =
       Lprim(access, [transl_exp arg; transl_exp newval], e.exp_loc)
+    in
+    let ptr = maybe_pointer newval in
+    begin match lbl.lbl_repres with
+    | Record_regular
+    | Record_inlined _  ->
+      set_arg_field (Psetfield (lbl.lbl_pos, ptr, Assignment))
+    | Record_unboxed _ -> assert false
+    | Record_float -> set_arg_field (Psetfloatfield (lbl.lbl_pos, Assignment))
+    | Record_extension ->
+      set_arg_field
+        (Psetfield (lbl.lbl_pos + 1, maybe_pointer newval, Assignment))
+    | Record_with_unboxed_fields ->
+      let unboxed = Builtin_attributes.has_unboxed lbl.lbl_attributes in
+      let pos = compute_field_position lbl.lbl_all lbl.lbl_pos in
+      if not unboxed then set_arg_field (Psetfield (pos, ptr, Assignment))
+      else
+        let dst_id = Ident.create "assignment_arg" in
+        Llet(Strict, Pgenval, dst_id, transl_exp arg,
+             pointwise_block_copy ~dst_id ~dst_offset:pos
+               ~src:newval lbl.lbl_size ~loc:e.exp_loc)
+    end
   | Texp_array expr_list ->
       let kind = array_kind e in
       let ll = transl_list expr_list in
@@ -1272,7 +1331,9 @@ and transl_setinstvar loc self var expr =
   Lprim(Parraysetu prim, [self; transl_normal_path var; transl_exp expr], loc)
 
 and transl_record loc env fields repres opt_init_expr =
-  let size = Array.length fields in
+  let size =
+    Array.fold_left (fun acc (def, _) -> acc + def.lbl_size) 0 fields
+  in
   (* Determine if there are "enough" fields (only relevant if this is a
      functional-style record update *)
   let no_init = match opt_init_expr with None -> true | _ -> false in
@@ -1283,23 +1344,35 @@ and transl_record loc env fields repres opt_init_expr =
     let init_id = Ident.create "init" in
     let lv =
       Array.mapi
-        (fun i (_, definition) ->
-           match definition with
+        (fun i (desc, def) ->
+           match def with
            | Kept typ ->
-               let field_kind = value_kind env typ in
-               let access =
+             let field_kind = value_kind env typ in
+             let access_init access = Lprim(access, [Lvar init_id], loc) in
+               let lam =
                  match repres with
-                   Record_regular | Record_inlined _ -> Pfield i
+                 | Record_regular | Record_inlined _ -> access_init (Pfield i)
+                 | Record_with_unboxed_fields ->
+                   (* TODO: this unnecessarily create a new record, can eliminate
+                      by merging this into the code below *)
+                   let unboxed =
+                     Builtin_attributes.has_unboxed desc.lbl_attributes
+                   in
+                   let pos = compute_field_position desc.lbl_all i in
+                   if not unboxed then access_init (Pfield pos)
+                   else project_fields_into_a_record
+                          ~src_offset:pos ~src:(Lvar init_id) desc.lbl_size ~loc
                  | Record_unboxed _ -> assert false
-                 | Record_extension -> Pfield (i + 1)
-                 | Record_float -> Pfloatfield i in
-               Lprim(access, [Lvar init_id], loc), field_kind
+                 | Record_extension -> access_init (Pfield (i + 1))
+                 | Record_float -> access_init (Pfloatfield i) in
+               lam, field_kind
            | Overridden (_lid, expr) ->
                let field_kind = value_kind expr.exp_env expr.exp_type in
                transl_exp expr, field_kind)
         fields
     in
     let ll, shape = List.split (Array.to_list lv) in
+    let descs = List.map fst (Array.to_list fields) in
     let mut =
       if Array.exists (fun (lbl, _) -> lbl.lbl_mut = Mutable) fields
       then Mutable
@@ -1307,9 +1380,17 @@ and transl_record loc env fields repres opt_init_expr =
     let lam =
       try
         if mut = Mutable then raise Not_constant;
-        let cl = List.map extract_constant ll in
+        let cl = List.fold_right2 (fun l desc cl ->
+          let unboxed = Builtin_attributes.has_unboxed desc.lbl_attributes in
+          let c = extract_constant l in
+          match c with
+          | Const_block (0, cl') when unboxed -> cl' @ cl
+          | _ -> c :: cl
+        ) ll descs []
+        in
         match repres with
-        | Record_regular -> Lconst(Const_block(0, cl))
+        | Record_regular | Record_with_unboxed_fields ->
+          Lconst(Const_block(0, cl))
         | Record_inlined tag -> Lconst(Const_block(tag, cl))
         | Record_unboxed _ -> Lconst(match cl with [v] -> v | _ -> assert false)
         | Record_float ->
@@ -1318,8 +1399,41 @@ and transl_record loc env fields repres opt_init_expr =
             raise Not_constant
       with Not_constant ->
         match repres with
-          Record_regular ->
-            Lprim(Pmakeblock(0, mut, Some shape), ll, loc)
+        | Record_regular ->
+          Lprim(Pmakeblock(0, mut, Some shape), ll, loc)
+        | Record_with_unboxed_fields ->
+          (* Create unique identifiers for every record field for later
+             binding *)
+          let descs = List.map (fun desc ->
+            Ident.create ("field_" ^ desc.lbl_name), desc) descs
+          in
+          let record_expr =
+            let rec_field_init_exprs, rec_shape =
+              List.fold_right2 (fun (field_id, desc) kind (init_exprs, shape) ->
+                let unboxed =
+                  Builtin_attributes.has_unboxed desc.lbl_attributes
+                in
+                if not unboxed then
+                  (Lvar field_id) :: init_exprs, kind :: shape
+                else begin
+                  (* Inline every cell of an [@unboxed] field *)
+                  (* TODO: somewhat duplicated code here and in
+                     [project_fields_into_a_record] *)
+                  let field_accessors =
+                    list_init desc.lbl_size (fun i ->
+                      Lprim(Pfield i, [Lvar field_id], loc))
+                  in
+                  let kinds = list_init desc.lbl_size (fun _ -> Pgenval) in
+                  field_accessors @ init_exprs, kinds @ shape
+                end
+              ) descs shape ([], [])
+            in
+            Lprim(Pmakeblock(0, mut, Some rec_shape), rec_field_init_exprs, loc)
+          in
+          (* Bind all fields to preserve the order of evaluation *)
+          List.fold_right2 (fun (field_id, _) field_expr in_expr ->
+            Llet(Strict, Pgenval, field_id, field_expr, in_expr))
+            descs ll record_expr
         | Record_inlined tag ->
             Lprim(Pmakeblock(tag, mut, Some shape), ll, loc)
         | Record_unboxed _ -> (match ll with [v] -> v | _ -> assert false)
@@ -1350,24 +1464,38 @@ and transl_record loc env fields repres opt_init_expr =
       match definition with
       | Kept _type -> cont
       | Overridden (_lid, expr) ->
-          let upd =
-            match repres with
-              Record_regular
-            | Record_inlined _ ->
-                Psetfield(lbl.lbl_pos, maybe_pointer expr, Assignment)
-            | Record_unboxed _ -> assert false
-            | Record_float -> Psetfloatfield (lbl.lbl_pos, Assignment)
-            | Record_extension ->
-                Psetfield(lbl.lbl_pos + 1, maybe_pointer expr, Assignment)
-          in
+        let assign_expr upd =
           Lsequence(Lprim(upd, [Lvar copy_id; transl_exp expr], loc), cont)
+        in
+        match repres with
+        | Record_regular
+        | Record_inlined _ ->
+          assign_expr (Psetfield (lbl.lbl_pos, maybe_pointer expr, Assignment))
+        | Record_with_unboxed_fields ->
+          let unboxed =
+            Builtin_attributes.has_unboxed lbl.lbl_attributes
+          in
+          let pos = compute_field_position lbl.lbl_all lbl.lbl_pos in
+          if not unboxed then
+            assign_expr (Psetfield (pos, maybe_pointer expr, Assignment))
+          else
+            Lsequence(
+              pointwise_block_copy
+                ~dst_id:copy_id ~dst_offset:pos
+                ~src:expr lbl.lbl_size ~loc, cont)
+        | Record_unboxed _ -> assert false
+        | Record_float ->
+          assign_expr (Psetfloatfield (lbl.lbl_pos, Assignment))
+        | Record_extension ->
+          assign_expr
+            (Psetfield (lbl.lbl_pos + 1, maybe_pointer expr, Assignment))
     in
     begin match opt_init_expr with
       None -> assert false
     | Some init_expr ->
-        Llet(Strict, Pgenval, copy_id,
-             Lprim(Pduprecord (repres, size), [transl_exp init_expr], loc),
-             Array.fold_left update_field (Lvar copy_id) fields)
+      Llet(Strict, Pgenval, copy_id,
+           Lprim(Pduprecord (repres, size), [transl_exp init_expr], loc),
+           Array.fold_left update_field (Lvar copy_id) fields)
     end
   end
 

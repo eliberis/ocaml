@@ -884,7 +884,9 @@ and tree_of_constructor cd =
       (name, args, Some ret)
 
 and tree_of_label l =
-  (Ident.name l.ld_id, l.ld_mutable = Mutable, tree_of_typexp false l.ld_type)
+  let unboxed = Builtin_attributes.has_unboxed l.ld_attributes in
+  (Ident.name l.ld_id, l.ld_mutable = Mutable, unboxed,
+   tree_of_typexp false l.ld_type)
 
 let tree_of_type_declaration id decl rs =
   Osig_type (tree_of_type_decl id decl, tree_of_rec rs)

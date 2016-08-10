@@ -141,6 +141,19 @@ let is_float env ty =
     Some {desc = Tconstr(p, _, _); _} -> Path.same p Predef.path_float
   | _ -> false
 
+(* Determine if a type is a record type, and if so, provide its field declarations
+   and representation. *)
+let record_type_params env ty =
+  let ty = Ctype.repr (Ctype.expand_head_opt env ty) in
+  match ty.desc with
+  | Tconstr (p, _, _) -> begin
+    let tydecl = Env.find_type p env in
+    match tydecl.type_kind with
+    | Type_record (decls, repr) -> Some (decls, repr)
+    | _ -> None
+    end
+  | _ -> None
+
 (* Determine if a type definition defines a fixed type. (PW) *)
 let is_fixed_type sd =
   let rec has_row_var sty =
@@ -199,6 +212,35 @@ let make_params env params =
   in
     List.map make_param params
 
+(* Computes the required block space for a type if it were to be unboxed. *)
+let get_unboxed_type_size env ty =
+  let rec get_unboxed_type_size env ty fuel =
+    if fuel < 0 then
+      (* We don't expect anyone to nest 10K unboxed records *)
+      assert false
+    else
+      let ty = Ctype.repr (Ctype.expand_head_opt env ty) in
+      match ty.desc with
+      | Tconstr (p, _, _) ->
+        let tydecl = Env.find_type p env in
+        begin match tydecl.type_kind with
+        | Type_record (decls, Record_with_unboxed_fields) ->
+            List.fold_left (fun acc ld ->
+              let nested_size =
+                if Builtin_attributes.has_unboxed ld.Types.ld_attributes then
+                  get_unboxed_type_size env ld.Types.ld_type (fuel - 1)
+                else 1
+              in
+              acc + nested_size) 0 decls
+        | Type_record (decls, _) ->
+          List.length decls
+        | _ -> 1
+        end
+      | _ -> 1
+  in
+  get_unboxed_type_size env ty 10000
+;;
+
 let transl_labels env closed lbls =
   assert (lbls <> []);
   let all_labels = ref StringSet.empty in
@@ -221,11 +263,17 @@ let transl_labels env closed lbls =
       (fun ld ->
          let ty = ld.ld_type.ctyp_type in
          let ty = match ty.desc with Tpoly(t,[]) -> t | _ -> ty in
+         let size =
+           if Builtin_attributes.has_unboxed ld.ld_attributes then
+             get_unboxed_type_size env ty
+           else 1
+         in
          {Types.ld_id = ld.ld_id;
           ld_mutable = ld.ld_mutable;
           ld_type = ty;
           ld_loc = ld.ld_loc;
-          ld_attributes = ld.ld_attributes
+          ld_attributes = ld.ld_attributes;
+          ld_size = size;
          }
       )
       lbls in
@@ -406,14 +454,42 @@ let transl_declaration env sdecl id =
         let tcstrs, cstrs = List.split (List.map make_cstr scstrs) in
           Ttype_variant tcstrs, Type_variant cstrs
       | Ptype_record lbls ->
-          let lbls, lbls' = transl_labels env true lbls in
-          let rep =
-            if unbox then Record_unboxed false
-            else if List.for_all (fun l -> is_float env l.Types.ld_type) lbls'
-            then Record_float
-            else Record_regular
-          in
-          Ttype_record lbls, Type_record(lbls', rep)
+        let lbls, lbls' = transl_labels env true lbls in
+        let check_suitable_for_unboxing l =
+          if Builtin_attributes.has_unboxed l.Types.ld_attributes then
+            let params = record_type_params env l.Types.ld_type in
+            match params with
+            | None ->
+              raise (Error (l.Types.ld_loc, Bad_unboxed_attribute
+                       "it is not a record type or it is recursive"))
+            | Some (decls, repr) ->
+              match repr with
+              | Record_unboxed _ ->
+                raise(Error (l.Types.ld_loc, Bad_unboxed_attribute
+                        "it is already marked as unboxed in \
+                         its type declaration"))
+              | Record_float ->
+                raise(Error (l.Types.ld_loc, Bad_unboxed_attribute
+                        "it has an optimised floating point representation"))
+              | Record_inlined _ | Record_extension -> assert false
+              | Record_regular | Record_with_unboxed_fields ->
+                if List.exists
+                     (fun decl -> decl.Types.ld_mutable = Mutable) decls
+                then
+                  raise (Error (l.Types.ld_loc, Bad_unboxed_attribute
+                                                  "it has mutable fields"))
+                else true
+          else false
+        in
+        let rep =
+          if unbox then Record_unboxed false
+          else if List.for_all (fun l -> is_float env l.Types.ld_type) lbls'
+          then Record_float
+          else if List.exists check_suitable_for_unboxing lbls'
+          then Record_with_unboxed_fields
+          else Record_regular
+        in
+        Ttype_record lbls, Type_record(lbls', rep)
       | Ptype_open -> Ttype_open, Type_open
       in
     let (tman, man) = match sdecl.ptype_manifest with
@@ -2046,7 +2122,7 @@ let report_error ppf = function
                    it might contain both float and non-float values.@ \
                    You should annotate it with [%@%@ocaml.boxed].@]"
   | Boxed_and_unboxed ->
-      fprintf ppf "@[A type cannot be boxed and unboxed at the same time.@]"
+    fprintf ppf "@[A type cannot be boxed and unboxed at the same time.@]"
 
 let () =
   Location.register_error_of_exn

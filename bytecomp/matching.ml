@@ -1639,7 +1639,7 @@ let make_record_matching loc all_labels def = function
           let lbl = all_labels.(pos) in
           let access =
             match lbl.lbl_repres with
-            | Record_regular | Record_inlined _ ->
+            | Record_regular | Record_inlined _ | Record_with_unboxed_fields ->
               Lprim (Pfield lbl.lbl_pos, [arg], loc)
             | Record_unboxed _ -> arg
             | Record_float -> Lprim (Pfloatfield lbl.lbl_pos, [arg], loc)

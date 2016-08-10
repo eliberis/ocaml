@@ -1,0 +1,140 @@
+
+#     type point = { x : int ; y : int ; }
+#   *   type t1 = { a : point [@unboxed]; b : int ; c : int ; }
+#       - : bool = true
+#   type t2 = { d : int ; e : point [@unboxed]; f : int ; }
+#       - : bool = true
+#   type t3 = { g : int ; h : int ; i : point [@unboxed]; }
+#       - : bool = true
+#     Characters 60-87:
+  type t4 = { j : (int * int) [@unboxed]; k : int };;
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This type cannot be unboxed because
+       it is not a record type or it is recursive.
+#     Characters 62-79:
+  type t5 = { l : t5 [@unboxed] };;
+              ^^^^^^^^^^^^^^^^^
+Error: This type cannot be unboxed because
+       it is not a record type or it is recursive.
+#   Characters 75-92:
+  and  t7 = { n : t6 [@unboxed] };;
+              ^^^^^^^^^^^^^^^^^
+Error: This type cannot be unboxed because
+       it is not a record type or it is recursive.
+#     type t8 = { mutable o : int ; p : int ; }
+# Characters 12-30:
+  type t9 = { q : t8 [@unboxed]; };;
+              ^^^^^^^^^^^^^^^^^^
+Error: This type cannot be unboxed because it has mutable fields.
+#     type t10 = { r : int ; } [@@unboxed]
+# Characters 13-31:
+  type t11 = { s : t10 [@unboxed] };;
+               ^^^^^^^^^^^^^^^^^^
+Error: This type cannot be unboxed because
+       it is already marked as unboxed in its type declaration.
+#     type t12 = { t : point [@unboxed]; u : int ; }
+# type t13 = { v : int ; w : t12 [@unboxed]; }
+#       - : bool = true
+#     type t14 = {
+  z : point [@unboxed];
+  a : point [@unboxed];
+  b : point [@unboxed];
+}
+#         - : bool = true
+#     type t15 = { mutable c : point [@unboxed]; d : int ; }
+# type t16 = { e : int ; mutable f : point [@unboxed]; }
+#         - : bool = true
+#         - : bool = true
+#     type t17 = { g : float ; h : float ; }
+# Characters 24-43:
+  type t18 = { i : float; j : t17 [@unboxed]; k : float };;
+                          ^^^^^^^^^^^^^^^^^^^
+Error: This type cannot be unboxed because
+       it has an optimised floating point representation.
+#     type t19 = { l : point [@unboxed]; m : int ; }
+#           - : bool = true
+#                   type pad = {
+  n : int ;
+  o : int ;
+  p : int ;
+  q : int ;
+  r : int ;
+  s : int ;
+  t : int ;
+  u : int ;
+  v : int ;
+  w : int ;
+  x : int ;
+  y : int ;
+  z : int ;
+  a : int ;
+  b : int ;
+  c : int ;
+  d : int ;
+  e : int ;
+  f : int ;
+  g : int ;
+  h : int ;
+  i : int ;
+  j : int ;
+  k : int ;
+  l : int ;
+  m : int ;
+  n2 : int ;
+  o2 : int ;
+  p2 : int ;
+  q2 : int ;
+  r2 : int ;
+  s2 : int ;
+}
+#                 val padrec : pad =
+  {n = 0; o = 0; p = 0; q = 0; r = 0; s = 0; t = 0; u = 0; v = 0; w = 0;
+   x = 0; y = 0; z = 0; a = 0; b = 0; c = 0; d = 0; e = 0; f = 0; g = 0;
+   h = 0; i = 0; j = 0; k = 0; l = 0; m = 0; n2 = 0; o2 = 0; p2 = 0; 
+   q2 = 0; r2 = 0; s2 = 0}
+#                 type t20 = {
+  t : pad [@unboxed];
+  u : pad [@unboxed];
+  v : pad [@unboxed];
+  w : pad [@unboxed];
+  x : pad [@unboxed];
+  y : pad [@unboxed];
+  z : pad [@unboxed];
+  a : pad [@unboxed];
+  b : point [@unboxed];
+  c : int ;
+  d : point [@unboxed];
+}
+#                     - : bool = true
+#               module M1 : sig type t = { e : point ; f : point [@unboxed]; } end
+#             Characters 77-134:
+  ......struct
+    type t = { e : point; f : point [@unboxed] }
+  end
+Error: Signature mismatch:
+       Modules do not match:
+         sig type t = { e : point ; f : point [@unboxed]; } end
+       is not included in
+         sig type t = { e : point ; f : point ; } end
+       Type declarations do not match:
+         type t = { e : point ; f : point [@unboxed]; }
+       is not included in
+         type t = { e : point ; f : point ; }
+       Their internal representations differ:
+       the first declaration has explicitly unboxed fields.
+#             Characters 88-134:
+  ......struct
+    type t = { e : point; f : point }
+  end
+Error: Signature mismatch:
+       Modules do not match:
+         sig type t = { e : point ; f : point ; } end
+       is not included in
+         sig type t = { e : point ; f : point [@unboxed]; } end
+       Type declarations do not match:
+         type t = { e : point ; f : point ; }
+       is not included in
+         type t = { e : point ; f : point [@unboxed]; }
+       Their internal representations differ:
+       the second declaration has explicitly unboxed fields.
+# 

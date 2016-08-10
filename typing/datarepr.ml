@@ -184,27 +184,29 @@ let dummy_label =
     lbl_private = Public;
     lbl_loc = Location.none;
     lbl_attributes = [];
+    lbl_size = 1;
   }
 
 let label_descrs ty_res lbls repres priv =
   let all_labels = Array.make (List.length lbls) dummy_label in
   let rec describe_labels num = function
-      [] -> []
+    | [] -> []
     | l :: rest ->
-        let lbl =
-          { lbl_name = Ident.name l.ld_id;
-            lbl_res = ty_res;
-            lbl_arg = l.ld_type;
-            lbl_mut = l.ld_mutable;
-            lbl_pos = num;
-            lbl_all = all_labels;
-            lbl_repres = repres;
-            lbl_private = priv;
-            lbl_loc = l.ld_loc;
-            lbl_attributes = l.ld_attributes;
-          } in
-        all_labels.(num) <- lbl;
-        (l.ld_id, lbl) :: describe_labels (num+1) rest in
+      let lbl =
+        { lbl_name = Ident.name l.ld_id;
+          lbl_res = ty_res;
+          lbl_arg = l.ld_type;
+          lbl_mut = l.ld_mutable;
+          lbl_pos = num;
+          lbl_all = all_labels;
+          lbl_repres = repres;
+          lbl_private = priv;
+          lbl_loc = l.ld_loc;
+          lbl_attributes = l.ld_attributes;
+          lbl_size = l.ld_size;
+        } in
+      all_labels.(num) <- lbl;
+      (l.ld_id, lbl) :: describe_labels (num+1) rest in
   describe_labels 0 lbls
 
 exception Constr_not_found
