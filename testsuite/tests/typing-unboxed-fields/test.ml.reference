@@ -6,21 +6,17 @@
 #       - : bool = true
 #   type t3 = { g : int ; h : int ; i : point [@unboxed]; }
 #       - : bool = true
-#     Characters 60-87:
-  type t4 = { j : (int * int) [@unboxed]; k : int };;
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This type cannot be unboxed because
-       it is not a record type or it is recursive.
+#     type t4 = { j : int * int [@unboxed]; k : int ; }
 #     Characters 62-79:
   type t5 = { l : t5 [@unboxed] };;
               ^^^^^^^^^^^^^^^^^
 Error: This type cannot be unboxed because
-       it is not a record type or it is recursive.
+       it is not an unboxable type or it is recursive.
 #   Characters 75-92:
   and  t7 = { n : t6 [@unboxed] };;
               ^^^^^^^^^^^^^^^^^
 Error: This type cannot be unboxed because
-       it is not a record type or it is recursive.
+       it is not an unboxable type or it is recursive.
 #     type t8 = { mutable o : int ; p : int ; }
 # Characters 12-30:
   type t9 = { q : t8 [@unboxed]; };;
@@ -137,4 +133,8 @@ Error: Signature mismatch:
          type t = { e : point ; f : point [@unboxed]; }
        Their internal representations differ:
        the second declaration has explicitly unboxed fields.
+#           type t21 = { g : int ; h : int * int [@unboxed]; i : int ; }
+#       - : bool = true
+#         type t22 = { g : int ; mutable h : int * int [@unboxed]; i : int ; }
+#         - : bool = true
 # 

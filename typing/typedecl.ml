@@ -143,16 +143,23 @@ let is_float env ty =
 
 (* Determine if a type is a record type, and if so, provide its field declarations
    and representation. *)
-let record_type_params env ty =
+
+type unboxable_type_info =
+  | Record of (Types.label_declaration list) * Types.record_representation
+  | Tuple
+  | Not_unboxable
+
+let get_unboxable_type_info env ty =
   let ty = Ctype.repr (Ctype.expand_head_opt env ty) in
   match ty.desc with
   | Tconstr (p, _, _) -> begin
     let tydecl = Env.find_type p env in
     match tydecl.type_kind with
-    | Type_record (decls, repr) -> Some (decls, repr)
-    | _ -> None
+    | Type_record (decls, repr) -> Record (decls, repr)
+    | _ -> Not_unboxable
     end
-  | _ -> None
+  | Ttuple _ -> Tuple
+  | _ -> Not_unboxable
 
 (* Determine if a type definition defines a fixed type. (PW) *)
 let is_fixed_type sd =
@@ -232,10 +239,10 @@ let get_unboxed_type_size env ty =
                 else 1
               in
               acc + nested_size) 0 decls
-        | Type_record (decls, _) ->
-          List.length decls
+        | Type_record (decls, _) -> List.length decls
         | _ -> 1
         end
+      | Ttuple fields -> List.length fields
       | _ -> 1
   in
   get_unboxed_type_size env ty 10000
@@ -457,13 +464,13 @@ let transl_declaration env sdecl id =
         let lbls, lbls' = transl_labels env true lbls in
         let check_suitable_for_unboxing l =
           if Builtin_attributes.has_unboxed l.Types.ld_attributes then
-            let params = record_type_params env l.Types.ld_type in
-            match params with
-            | None ->
+            let unbox_info = get_unboxable_type_info env l.Types.ld_type in
+            match unbox_info with
+            | Not_unboxable ->
               raise (Error (l.Types.ld_loc, Bad_unboxed_attribute
-                       "it is not a record type or it is recursive"))
-            | Some (decls, repr) ->
-              match repr with
+                       "it is not an unboxable type or it is recursive"))
+            | Record (decls, repr) ->
+              begin match repr with
               | Record_unboxed _ ->
                 raise(Error (l.Types.ld_loc, Bad_unboxed_attribute
                         "it is already marked as unboxed in \
@@ -477,8 +484,10 @@ let transl_declaration env sdecl id =
                      (fun decl -> decl.Types.ld_mutable = Mutable) decls
                 then
                   raise (Error (l.Types.ld_loc, Bad_unboxed_attribute
-                                                  "it has mutable fields"))
+                           "it has mutable fields"))
                 else true
+              end
+            | Tuple -> true
           else false
         in
         let rep =

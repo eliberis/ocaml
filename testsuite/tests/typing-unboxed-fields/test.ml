@@ -141,3 +141,23 @@ end = struct
   type t = { e : point; f : point }
 end
 ;;
+
+(* Tuple unboxing *)
+type t21 = { g : int;
+             h : int * int [@unboxed];
+             i : int; }
+;;
+
+let r = { g = 0; h = (0, 0); i = 0; } in
+r.h = (0, 0)
+;;
+
+type t22 = { g : int;
+             mutable h : int * int [@unboxed];
+             i : int; }
+;;
+
+let r = { g = 0; h = (0, 0); i = 0; } in
+r.h <- (1, 1);
+r.h = (1, 1)
+;;
