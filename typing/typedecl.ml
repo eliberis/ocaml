@@ -221,31 +221,17 @@ let make_params env params =
 
 (* Computes the required block space for a type if it were to be unboxed. *)
 let get_unboxed_type_size env ty =
-  let rec get_unboxed_type_size env ty fuel =
-    if fuel < 0 then
-      (* We don't expect anyone to nest 10K unboxed records *)
-      assert false
-    else
-      let ty = Ctype.repr (Ctype.expand_head_opt env ty) in
-      match ty.desc with
-      | Tconstr (p, _, _) ->
-        let tydecl = Env.find_type p env in
-        begin match tydecl.type_kind with
-        | Type_record (decls, Record_with_unboxed_fields) ->
-            List.fold_left (fun acc ld ->
-              let nested_size =
-                if Builtin_attributes.has_unboxed ld.Types.ld_attributes then
-                  get_unboxed_type_size env ld.Types.ld_type (fuel - 1)
-                else 1
-              in
-              acc + nested_size) 0 decls
-        | Type_record (decls, _) -> List.length decls
-        | _ -> 1
-        end
-      | Ttuple fields -> List.length fields
-      | _ -> 1
-  in
-  get_unboxed_type_size env ty 10000
+  let ty = Ctype.repr (Ctype.expand_head_opt env ty) in
+  match ty.desc with
+  | Tconstr (p, _, _) ->
+    let tydecl = Env.find_type p env in
+    begin match tydecl.type_kind with
+    | Type_record (_, Record_with_unboxed_fields size) -> size
+    | Type_record (decls, _) -> List.length decls
+    | _ -> 1
+    end
+  | Ttuple fields -> List.length fields
+  | _ -> 1
 ;;
 
 let transl_labels env closed lbls =
@@ -270,8 +256,9 @@ let transl_labels env closed lbls =
       (fun ld ->
          let ty = ld.ld_type.ctyp_type in
          let ty = match ty.desc with Tpoly(t,[]) -> t | _ -> ty in
+         let unboxed = Builtin_attributes.has_unboxed ld.ld_attributes in
          let size =
-           if Builtin_attributes.has_unboxed ld.ld_attributes then
+           if unboxed then
              get_unboxed_type_size env ty
            else 1
          in
@@ -280,6 +267,7 @@ let transl_labels env closed lbls =
           ld_type = ty;
           ld_loc = ld.ld_loc;
           ld_attributes = ld.ld_attributes;
+          ld_unboxed = unboxed;
           ld_size = size;
          }
       )
@@ -347,6 +335,34 @@ let rec check_unboxed_gadt_arg loc ex env ty =
       (* This case is tricky: the argument is another (or the same) type
          in the same recursive definition. In this case we don't have to
          check because we will also check that other type for correctness. *)
+
+let check_suitable_for_unboxing env l =
+  if Builtin_attributes.has_unboxed l.Types.ld_attributes then
+    let unbox_info = get_unboxable_type_info env l.Types.ld_type in
+    match unbox_info with
+    | Not_unboxable ->
+      raise (Error (l.Types.ld_loc, Bad_unboxed_attribute
+               "it is not an unboxable type or it is recursive"))
+    | Record (decls, repr) ->
+      begin match repr with
+      | Record_unboxed _ ->
+        raise(Error (l.Types.ld_loc, Bad_unboxed_attribute
+                "it is already marked as unboxed in \
+                 its type declaration"))
+      | Record_float ->
+        raise(Error (l.Types.ld_loc, Bad_unboxed_attribute
+                "it has an optimised floating point representation"))
+      | Record_inlined _ | Record_extension -> assert false
+      | Record_regular | Record_with_unboxed_fields _ ->
+        if List.exists
+             (fun decl -> decl.Types.ld_mutable = Mutable) decls
+        then
+          raise (Error (l.Types.ld_loc, Bad_unboxed_attribute
+                   "it has mutable fields"))
+        else true
+      end
+    | Tuple -> true
+  else false
 
 let transl_declaration env sdecl id =
   (* Bind type parameters *)
@@ -462,40 +478,14 @@ let transl_declaration env sdecl id =
           Ttype_variant tcstrs, Type_variant cstrs
       | Ptype_record lbls ->
         let lbls, lbls' = transl_labels env true lbls in
-        let check_suitable_for_unboxing l =
-          if Builtin_attributes.has_unboxed l.Types.ld_attributes then
-            let unbox_info = get_unboxable_type_info env l.Types.ld_type in
-            match unbox_info with
-            | Not_unboxable ->
-              raise (Error (l.Types.ld_loc, Bad_unboxed_attribute
-                       "it is not an unboxable type or it is recursive"))
-            | Record (decls, repr) ->
-              begin match repr with
-              | Record_unboxed _ ->
-                raise(Error (l.Types.ld_loc, Bad_unboxed_attribute
-                        "it is already marked as unboxed in \
-                         its type declaration"))
-              | Record_float ->
-                raise(Error (l.Types.ld_loc, Bad_unboxed_attribute
-                        "it has an optimised floating point representation"))
-              | Record_inlined _ | Record_extension -> assert false
-              | Record_regular | Record_with_unboxed_fields ->
-                if List.exists
-                     (fun decl -> decl.Types.ld_mutable = Mutable) decls
-                then
-                  raise (Error (l.Types.ld_loc, Bad_unboxed_attribute
-                           "it has mutable fields"))
-                else true
-              end
-            | Tuple -> true
-          else false
-        in
         let rep =
           if unbox then Record_unboxed false
           else if List.for_all (fun l -> is_float env l.Types.ld_type) lbls'
           then Record_float
-          else if List.exists check_suitable_for_unboxing lbls'
-          then Record_with_unboxed_fields
+          else if List.exists (check_suitable_for_unboxing env) lbls'
+          then
+            let size = List.fold_left (fun acc l -> acc + l.ld_size) 0 lbls' in
+            Record_with_unboxed_fields size
           else Record_regular
         in
         Ttype_record lbls, Type_record(lbls', rep)

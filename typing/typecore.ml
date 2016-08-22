@@ -774,7 +774,7 @@ module Label = NameChoice (struct
   let in_env lbl =
     match lbl.lbl_repres with
     | Record_regular | Record_float | Record_unboxed false
-    | Record_with_unboxed_fields -> true
+    | Record_with_unboxed_fields _ -> true
     | Record_unboxed true | Record_inlined _ | Record_extension -> false
 end)
 

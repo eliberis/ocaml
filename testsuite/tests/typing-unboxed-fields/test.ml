@@ -1,5 +1,4 @@
 (* Check the unboxing of record fields *)
-
 type point = { x : int; y : int };;
 
 (* As a first, middle, and last field to check that
@@ -7,19 +6,31 @@ type point = { x : int; y : int };;
 type t1 = { a : point [@unboxed]; b : int; c : int; };;
 
 let r = { a = { x = 0; y = 0; }; b = 0; c = 0; } in
-Obj.size (Obj.repr r) = 4
+let match_test ({ a = { x; y; }; b; c; }) =
+  x = 0 && y = 0 && b = 0 && c = 0
+in
+assert (match_test r);
+assert (Obj.size (Obj.repr r) = 4);
 ;;
 
 type t2 = { d : int; e : point [@unboxed]; f : int; };;
 
 let r = { d = 0; e = { x = 0; y = 0; }; f = 0; } in
-Obj.size (Obj.repr r) = 4
+let match_test ({ d; e = { x; y; }; f; }) =
+  d = 0 && x = 0 && y = 0 && f = 0
+in
+assert (match_test r);
+assert (Obj.size (Obj.repr r) = 4)
 ;;
 
 type t3 = { g : int; h : int; i : point [@unboxed]; };;
 
 let r = { g = 0; h = 0; i = { x = 0; y = 0; }; } in
-Obj.size (Obj.repr r) = 4
+let match_test ({ g; h; i = { x; y; }; }) =
+  g = 0 && h = 0 && x = 0 && y = 0
+in
+assert (match_test r);
+assert (Obj.size (Obj.repr r) = 4)
 ;;
 
 (* Check that non-records cannot be unboxed *)
@@ -43,7 +54,11 @@ type t12 = { t : point [@unboxed]; u : int };;
 type t13 = { v : int; w : t12 [@unboxed]; };;
 
 let r = { v = 0; w = { t = { x = 0; y = 0; }; u = 0; }; } in
-Obj.size (Obj.repr r) = 4
+let match_test { v; w = { t = { x; y; }; u}; } =
+  v = 0 && x = 0 && y = 0 && u = 0
+in
+assert (match_test r);
+assert (Obj.size (Obj.repr r) = 4);
 ;;
 
 (* Multiple unboxing is supported *)
@@ -51,7 +66,7 @@ type t14 = { z : point [@unboxed]; a : point [@unboxed]; b : point [@unboxed] };
 
 let q = { x = 0; y = 0; } in
 let r = { z = q; a = q; b = q } in
-Obj.size (Obj.repr r) = (3 * 2)
+assert (Obj.size (Obj.repr r) = (3 * 2))
 ;;
 
 (* Mutable unboxes. Check that set-field calculated position is correct *)
@@ -60,12 +75,12 @@ type t16 = { e : int; mutable f : point [@unboxed]; };;
 
 let r = { c = { x = 0; y = 0; }; d = 0; } in
 r.c <- { x = 1; y = 1 };
-r.c.x = 1 && r.c.y = 1
+assert (r.c.x = 1 && r.c.y = 1)
 ;;
 
 let r = { e = 0; f = { x = 0; y = 0; }; } in
 r.f <- { x = 1; y = 1 };
-r.f.x = 1 && r.f.y = 1
+assert (r.f.x = 1 && r.f.y = 1)
 ;;
 
 (* Float inline not supported *)
@@ -78,7 +93,7 @@ type t19 = { l : point [@unboxed]; m : int };;
 let r1 = { l = { x = 0; y = 0; }; m = 0 } in
 (* Allocates a new record and projects fields out of r1 *)
 let r2 = { r1 with m = 1 } in
-r2.l.x = 0 && r2.l.y = 0 && r2.m = 1
+assert (r2.l.x = 0 && r2.l.y = 0 && r2.m = 1)
 ;;
 
 type pad = { n : int;  o : int;  p : int;  q : int;
@@ -117,7 +132,7 @@ let r1 = { t = padrec; u = padrec; v = padrec; w = padrec;
 let q = { x = 1; y = 1 } in
 (* Takes a shallow copy of r1 and mutates b, c, d *)
 let r2 = { r1 with b = q; c = 1; d = q; } in
-r2.b.x = 1 && r2.c = 1 && r2.d.x = 1
+assert (r2.b.x = 1 && r2.c = 1 && r2.d.x = 1)
 ;;
 
 (* Module signature and its definition have to have consistent annotations *)
@@ -149,7 +164,11 @@ type t21 = { g : int;
 ;;
 
 let r = { g = 0; h = (0, 0); i = 0; } in
-r.h = (0, 0)
+let match_test { g; h = (x, y); i } =
+  g = 0 && x = 0 && y = 0 && i = 0
+in
+assert (match_test r);
+assert (r.h = (0, 0))
 ;;
 
 type t22 = { g : int;
@@ -159,5 +178,5 @@ type t22 = { g : int;
 
 let r = { g = 0; h = (0, 0); i = 0; } in
 r.h <- (1, 1);
-r.h = (1, 1)
+assert (r.h = (1, 1))
 ;;

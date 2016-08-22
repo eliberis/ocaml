@@ -401,10 +401,13 @@ module Analyser =
     let get_cstr_args env pos_end =
       let tuple ct = Odoc_env.subst_type env ct.Typedtree.ctyp_type in
       let record comments
-          { Typedtree.ld_id; ld_mutable; ld_type; ld_loc; ld_attributes } =
+          { Typedtree.ld_id; ld_mutable; ld_type; ld_loc;
+            ld_attributes; } =
         get_field env comments @@
         {Types.ld_id; ld_mutable; ld_type=ld_type.Typedtree.ctyp_type;
-         ld_loc; ld_attributes; ld_size = 1; } in (* TODO el: investigate *)
+         ld_loc; ld_attributes;
+         ld_unboxed = Builtin_attributes.has_unboxed ld_attributes;
+         ld_size = 1; } in (* TODO: investigate *)
       let open Typedtree in
       function
       | Cstr_tuple l ->

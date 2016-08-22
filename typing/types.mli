@@ -310,8 +310,9 @@ and record_representation =
   | Record_unboxed of bool    (* Unboxed single-field record, inlined or not *)
   | Record_inlined of int               (* Inlined record *)
   | Record_extension                    (* Inlined record under extension *)
-  | Record_with_unboxed_fields          (* Some fields are 'inlined' into the
-                                           record block. *)
+  | Record_with_unboxed_fields of int   (* Some fields are 'inlined' into the
+                                           record block. The parameter gives the
+                                           total size of the record. *)
 
 and label_declaration =
   {
@@ -320,6 +321,8 @@ and label_declaration =
     ld_type: type_expr;
     ld_loc: Location.t;
     ld_attributes: Parsetree.attributes;
+    ld_unboxed : bool;                  (* Is this field inlined into the parent
+                                           record? *)
     ld_size : int;                      (* Width of the label type *)
   }
 
@@ -479,6 +482,8 @@ type label_description =
     lbl_private: private_flag;          (* Read-only field? *)
     lbl_loc: Location.t;
     lbl_attributes: Parsetree.attributes;
+    lbl_unboxed : bool;                 (* Is this field inlined into the parent
+                                           record? *)
     lbl_size: int;                      (* The size of a heap block required
                                            to represent this field *)
   }

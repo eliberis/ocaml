@@ -107,7 +107,8 @@ let record_rep ppf r =
   | Record_unboxed true -> fprintf ppf "inlined(unboxed)"
   | Record_float -> fprintf ppf "float"
   | Record_extension -> fprintf ppf "ext"
-  | Record_with_unboxed_fields -> fprintf ppf "regular_with_unboxed_fields"
+  | Record_with_unboxed_fields s ->
+    fprintf ppf "regular_with_unboxed_fields(size=%d)" s
 ;;
 
 let string_of_loc_kind = function

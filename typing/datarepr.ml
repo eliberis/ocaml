@@ -184,6 +184,7 @@ let dummy_label =
     lbl_private = Public;
     lbl_loc = Location.none;
     lbl_attributes = [];
+    lbl_unboxed = false;
     lbl_size = 1;
   }
 
@@ -203,6 +204,7 @@ let label_descrs ty_res lbls repres priv =
           lbl_private = priv;
           lbl_loc = l.ld_loc;
           lbl_attributes = l.ld_attributes;
+          lbl_unboxed = l.ld_unboxed;
           lbl_size = l.ld_size;
         } in
       all_labels.(num) <- lbl;

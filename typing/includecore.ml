@@ -126,7 +126,7 @@ type type_mismatch =
   | Field_arity of Ident.t
   | Field_names of int * Ident.t * Ident.t
   | Field_missing of bool * Ident.t
-  | Record_representation of bool * [`Float | `Unboxed_field ]
+  | Record_representation of bool * Types.record_representation
                                     (* true means second one is unboxed float *)
   | Unboxed_representation of bool  (* true means second one is unboxed *)
   | Immediate
@@ -156,8 +156,9 @@ let report_type_mismatch0 first second decl ppf err =
       pr "Their internal representations differ:@ %s %s %s"
         (if b then second else first) decl
         (match repr with
-        | `Float -> "uses unboxed float representation"
-        | `Unboxed_field -> "has explicitly unboxed fields")
+        | Record_float-> "uses unboxed float representation"
+        | Record_with_unboxed_fields _ -> "has explicitly unboxed fields"
+        | _ -> assert false)
   | Unboxed_representation b ->
       pr "Their internal representations differ:@ %s %s %s"
          (if b then second else first) decl
@@ -274,18 +275,11 @@ let type_declarations ?(equality = false) env name decl1 id decl2 =
         let err = compare_records env decl1.type_params decl2.type_params
             1 labels1 labels2 in
         if err <> [] || rep1 = rep2 then err else
-          let get_repr = function
-            | Record_float -> Some `Float
-            | Record_with_unboxed_fields -> Some `Unboxed_field
-            | _ -> None
-          in
           let second_unboxed, repr =
-            match get_repr rep2 with
-            | Some repr -> true, repr
-            | None ->
-              match get_repr rep1 with
-              | Some repr -> false, repr
-              | _ -> assert false
+            match rep1, rep2 with
+            | (Record_float | Record_with_unboxed_fields _), _ -> false, rep1
+            | _, (Record_float | Record_with_unboxed_fields _) -> true, rep2
+            | _, _ -> assert false
           in
           [Record_representation (second_unboxed, repr)]
     | (Type_open, Type_open) -> []
