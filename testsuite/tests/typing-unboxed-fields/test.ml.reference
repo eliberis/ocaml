@@ -1,12 +1,12 @@
 
-#     type point = { x : int ; y : int ; }
-#   *   type t1 = { a : point [@unboxed]; b : int ; c : int ; }
-#       - : bool = true
-#   type t2 = { d : int ; e : point [@unboxed]; f : int ; }
-#       - : bool = true
-#   type t3 = { g : int ; h : int ; i : point [@unboxed]; }
-#       - : bool = true
-#     type t4 = { j : int * int [@unboxed]; k : int ; }
+#   type point = { x : int; y : int; }
+#   *   type t1 = { a : point [@unboxed]; b : int; c : int; }
+#               - : unit = ()
+#   type t2 = { d : int; e : point [@unboxed]; f : int; }
+#               - : unit = ()
+#   type t3 = { g : int; h : int; i : point [@unboxed]; }
+#               - : unit = ()
+#     type t4 = { j : int * int [@unboxed]; k : int; }
 #     Characters 62-79:
   type t5 = { l : t5 [@unboxed] };;
               ^^^^^^^^^^^^^^^^^
@@ -17,71 +17,81 @@ Error: This type cannot be unboxed because
               ^^^^^^^^^^^^^^^^^
 Error: This type cannot be unboxed because
        it is not an unboxable type or it is recursive.
-#     type t8 = { mutable o : int ; p : int ; }
+#     type t8 = { mutable o : int; p : int; }
 # Characters 12-30:
   type t9 = { q : t8 [@unboxed]; };;
               ^^^^^^^^^^^^^^^^^^
 Error: This type cannot be unboxed because it has mutable fields.
-#     type t10 = { r : int ; } [@@unboxed]
+#     type t10 = { r : int; } [@@unboxed]
 # Characters 13-31:
   type t11 = { s : t10 [@unboxed] };;
                ^^^^^^^^^^^^^^^^^^
 Error: This type cannot be unboxed because
        it is already marked as unboxed in its type declaration.
-#     type t12 = { t : point [@unboxed]; u : int ; }
-# type t13 = { v : int ; w : t12 [@unboxed]; }
-#       - : bool = true
+# Characters 0-48:
+  type t11a = { a : point [@unboxed] } [@@unboxed];;
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This type cannot be unboxed because
+       it contains unboxed fields. Use [@@unboxed] instead.
+# Characters 0-53:
+  type t11b = T of { a : point [@unboxed] } [@@unboxed];;
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This type cannot be unboxed because
+       it contains unboxed fields. Use [@@unboxed] instead.
+#     type t12 = { t : point [@unboxed]; u : int; }
+# type t13 = { v : int; w : t12 [@unboxed]; }
+#               - : unit = ()
 #     type t14 = {
   z : point [@unboxed];
   a : point [@unboxed];
   b : point [@unboxed];
 }
-#         - : bool = true
-#     type t15 = { mutable c : point [@unboxed]; d : int ; }
-# type t16 = { e : int ; mutable f : point [@unboxed]; }
-#         - : bool = true
-#         - : bool = true
-#     type t17 = { g : float ; h : float ; }
+#         - : unit = ()
+#     type t15 = { mutable c : point [@unboxed]; d : int; }
+# type t16 = { e : int; mutable f : point [@unboxed]; }
+#         - : unit = ()
+#         - : unit = ()
+#     type t17 = { g : float; h : float; }
 # Characters 24-43:
   type t18 = { i : float; j : t17 [@unboxed]; k : float };;
                           ^^^^^^^^^^^^^^^^^^^
 Error: This type cannot be unboxed because
        it has an optimised floating point representation.
-#     type t19 = { l : point [@unboxed]; m : int ; }
-#           - : bool = true
+#     type t19 = { l : point [@unboxed]; m : int; }
+#           - : unit = ()
 #                   type pad = {
-  n : int ;
-  o : int ;
-  p : int ;
-  q : int ;
-  r : int ;
-  s : int ;
-  t : int ;
-  u : int ;
-  v : int ;
-  w : int ;
-  x : int ;
-  y : int ;
-  z : int ;
-  a : int ;
-  b : int ;
-  c : int ;
-  d : int ;
-  e : int ;
-  f : int ;
-  g : int ;
-  h : int ;
-  i : int ;
-  j : int ;
-  k : int ;
-  l : int ;
-  m : int ;
-  n2 : int ;
-  o2 : int ;
-  p2 : int ;
-  q2 : int ;
-  r2 : int ;
-  s2 : int ;
+  n : int;
+  o : int;
+  p : int;
+  q : int;
+  r : int;
+  s : int;
+  t : int;
+  u : int;
+  v : int;
+  w : int;
+  x : int;
+  y : int;
+  z : int;
+  a : int;
+  b : int;
+  c : int;
+  d : int;
+  e : int;
+  f : int;
+  g : int;
+  h : int;
+  i : int;
+  j : int;
+  k : int;
+  l : int;
+  m : int;
+  n2 : int;
+  o2 : int;
+  p2 : int;
+  q2 : int;
+  r2 : int;
+  s2 : int;
 }
 #                 val padrec : pad =
   {n = 0; o = 0; p = 0; q = 0; r = 0; s = 0; t = 0; u = 0; v = 0; w = 0;
@@ -98,24 +108,24 @@ Error: This type cannot be unboxed because
   z : pad [@unboxed];
   a : pad [@unboxed];
   b : point [@unboxed];
-  c : int ;
+  c : int;
   d : point [@unboxed];
 }
-#                     - : bool = true
-#               module M1 : sig type t = { e : point ; f : point [@unboxed]; } end
+#                     - : unit = ()
+#               module M1 : sig type t = { e : point; f : point [@unboxed]; } end
 #             Characters 77-134:
   ......struct
     type t = { e : point; f : point [@unboxed] }
   end
 Error: Signature mismatch:
        Modules do not match:
-         sig type t = { e : point ; f : point [@unboxed]; } end
+         sig type t = { e : point; f : point [@unboxed]; } end
        is not included in
-         sig type t = { e : point ; f : point ; } end
+         sig type t = { e : point; f : point; } end
        Type declarations do not match:
-         type t = { e : point ; f : point [@unboxed]; }
+         type t = { e : point; f : point [@unboxed]; }
        is not included in
-         type t = { e : point ; f : point ; }
+         type t = { e : point; f : point; }
        Their internal representations differ:
        the first declaration has explicitly unboxed fields.
 #             Characters 88-134:
@@ -124,17 +134,17 @@ Error: Signature mismatch:
   end
 Error: Signature mismatch:
        Modules do not match:
-         sig type t = { e : point ; f : point ; } end
+         sig type t = { e : point; f : point; } end
        is not included in
-         sig type t = { e : point ; f : point [@unboxed]; } end
+         sig type t = { e : point; f : point [@unboxed]; } end
        Type declarations do not match:
-         type t = { e : point ; f : point ; }
+         type t = { e : point; f : point; }
        is not included in
-         type t = { e : point ; f : point [@unboxed]; }
+         type t = { e : point; f : point [@unboxed]; }
        Their internal representations differ:
        the second declaration has explicitly unboxed fields.
-#           type t21 = { g : int ; h : int * int [@unboxed]; i : int ; }
-#       - : bool = true
-#         type t22 = { g : int ; mutable h : int * int [@unboxed]; i : int ; }
-#         - : bool = true
-# 
+#           type t21 = { g : int; h : int * int [@unboxed]; i : int; }
+#               - : unit = ()
+#         type t22 = { g : int; mutable h : int * int [@unboxed]; i : int; }
+#         - : unit = ()
+#     * * * * *   

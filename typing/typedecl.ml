@@ -390,6 +390,11 @@ let transl_declaration env sdecl id =
       raise(Error(sdecl.ptype_loc, Bad_unboxed_attribute
                     "its constructor has more than one argument"))
     | Ptype_variant [{pcd_args = Pcstr_record
+                        [{pld_mutable=Immutable; pld_attributes}]; _}]
+      when Builtin_attributes.has_unboxed pld_attributes ->
+      raise(Error(sdecl.ptype_loc, Bad_unboxed_attribute
+                  "it contains unboxed fields. Use [@@unboxed] instead"))
+    | Ptype_variant [{pcd_args = Pcstr_record
                         [{pld_mutable=Immutable; _}]; _}] -> ()
     | Ptype_variant [{pcd_args = Pcstr_record [{pld_mutable=Mutable; _}]; _}] ->
       raise(Error(sdecl.ptype_loc, Bad_unboxed_attribute "it is mutable"))
@@ -399,6 +404,10 @@ let transl_declaration env sdecl id =
     | Ptype_variant _ ->
       raise(Error(sdecl.ptype_loc, Bad_unboxed_attribute
                     "it has more than one constructor"))
+    | Ptype_record [{pld_mutable=Immutable; pld_attributes; _}]
+      when Builtin_attributes.has_unboxed pld_attributes ->
+      raise(Error(sdecl.ptype_loc, Bad_unboxed_attribute
+                  "it contains unboxed fields. Use [@@unboxed] instead"))
     | Ptype_record [{pld_mutable=Immutable; _}] -> ()
     | Ptype_record [{pld_mutable=Mutable; _}] ->
       raise(Error(sdecl.ptype_loc, Bad_unboxed_attribute

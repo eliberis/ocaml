@@ -48,6 +48,8 @@ type t9 = { q : t8 [@unboxed]; };;
 (* Unboxing interactions are checked *)
 type t10 = { r : int } [@@unboxed];;
 type t11 = { s : t10 [@unboxed] };;
+type t11a = { a : point [@unboxed] } [@@unboxed];;
+type t11b = T of { a : point [@unboxed] } [@@unboxed];;
 
 (* Nested unboxing is supported *)
 type t12 = { t : point [@unboxed]; u : int };;
@@ -180,3 +182,11 @@ let r = { g = 0; h = (0, 0); i = 0; } in
 r.h <- (1, 1);
 assert (r.h = (1, 1))
 ;;
+
+(* TODO: 'Inlined' record unboxing *)
+(* type t23 = T of { i : int; j : point [@unboxed] }
+ * ;;
+ *
+ * type t24 = U of { k : point [@unboxed]; l : int }
+ *          | V of { m : int; n : point [@unboxed] }
+ * ;; *)
