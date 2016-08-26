@@ -35,8 +35,6 @@ val lazy_val_requires_forward : Env.t -> Types.type_expr -> bool
       if the value can be represented as a float/forward/lazy *)
 
 (* Helper functions for accessing unboxed record fields correctly *)
-val compute_field_position :
-  Types.label_description array -> int -> int
 val project_fields_into_a_record :
   ?src_offset:int -> src:Lambda.lambda -> int -> loc:Location.t -> Lambda.lambda
 val pointwise_block_copy :
@@ -46,3 +44,4 @@ val pointwise_block_copy :
   src:Lambda.lambda ->
   ptr:Lambda.immediate_or_pointer ->
   int -> loc:Location.t -> Lambda.lambda
+val adjusted_offset : Types.label_description -> int

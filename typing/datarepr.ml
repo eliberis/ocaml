@@ -193,11 +193,12 @@ let dummy_label =
     lbl_attributes = [];
     lbl_unboxed = false;
     lbl_size = 1;
+    lbl_offset = (-1);
   }
 
 let label_descrs ty_res lbls repres priv =
   let all_labels = Array.make (List.length lbls) dummy_label in
-  let rec describe_labels num = function
+  let rec describe_labels num offset = function
     | [] -> []
     | l :: rest ->
       let lbl =
@@ -213,10 +214,11 @@ let label_descrs ty_res lbls repres priv =
           lbl_attributes = l.ld_attributes;
           lbl_unboxed = l.ld_unboxed;
           lbl_size = l.ld_size;
+          lbl_offset = offset;
         } in
       all_labels.(num) <- lbl;
-      (l.ld_id, lbl) :: describe_labels (num+1) rest in
-  describe_labels 0 lbls
+      (l.ld_id, lbl) :: describe_labels (num+1) (offset + lbl.lbl_size) rest in
+  describe_labels 0 0 lbls
 
 exception Constr_not_found
 

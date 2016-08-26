@@ -489,4 +489,6 @@ type label_description =
                                            record? *)
     lbl_size: int;                      (* The size of a heap block required
                                            to represent this field *)
+    lbl_offset : int;                   (* Position of the first field for this
+                                           label in the parent record *)
   }

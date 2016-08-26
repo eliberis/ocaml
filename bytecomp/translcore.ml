@@ -894,18 +894,17 @@ and transl_exp0 e =
   | Texp_field(arg, _, lbl) ->
       let targ = transl_exp arg in
       begin match lbl.lbl_repres with
-      | Record_regular | Record_inlined _ ->
-        Lprim (Pfield lbl.lbl_pos, [targ], e.exp_loc)
-      | Record_with_unboxed_fields (_, _, _) ->
-        let pos = compute_field_position lbl.lbl_all lbl.lbl_pos in
-        if not lbl.lbl_unboxed then Lprim (Pfield pos, [targ], e.exp_loc)
-        else Typeopt.project_fields_into_a_record
-               ~src:targ ~src_offset:pos
-               lbl.lbl_size ~loc:e.exp_loc
+      | Record_regular | Record_inlined _
+      | Record_with_unboxed_fields (_, _, _)
+      | Record_extension ->
+        let pos = Typeopt.adjusted_offset lbl in
+        if not lbl.lbl_unboxed then
+          Lprim (Pfield pos, [targ], e.exp_loc)
+        else
+          Typeopt.project_fields_into_a_record
+            ~src:targ ~src_offset:pos lbl.lbl_size ~loc:e.exp_loc
       | Record_unboxed _ -> targ
       | Record_float -> Lprim (Pfloatfield lbl.lbl_pos, [targ], e.exp_loc)
-      | Record_extension ->
-        Lprim (Pfield (lbl.lbl_pos + 1), [targ], e.exp_loc)
       end
   | Texp_setfield(arg, _, lbl, newval) ->
     let set_arg_field access =
@@ -913,23 +912,20 @@ and transl_exp0 e =
     in
     let ptr = maybe_pointer newval in
     begin match lbl.lbl_repres with
-    | Record_regular
-    | Record_inlined _  ->
-      set_arg_field (Psetfield (lbl.lbl_pos, ptr, Assignment))
-    | Record_unboxed _ -> assert false
-    | Record_float -> set_arg_field (Psetfloatfield (lbl.lbl_pos, Assignment))
+    | Record_regular | Record_inlined _
+    | Record_with_unboxed_fields (_, _, _)
     | Record_extension ->
-      set_arg_field
-        (Psetfield (lbl.lbl_pos + 1, maybe_pointer newval, Assignment))
-    | Record_with_unboxed_fields (_, _, _) ->
-      let pos = Typeopt.compute_field_position lbl.lbl_all lbl.lbl_pos in
-      if not lbl.lbl_unboxed then set_arg_field (Psetfield (pos, ptr, Assignment))
+      let pos = Typeopt.adjusted_offset lbl in
+      if not lbl.lbl_unboxed then
+        set_arg_field (Psetfield (pos, ptr, Assignment))
       else
         let dst_id = Ident.create "assignment_arg" in
         Llet(Strict, Pgenval, dst_id, transl_exp arg,
              Typeopt.pointwise_block_copy ~dst_id ~dst_offset:pos
                ~src:(transl_exp newval) ~ptr:(maybe_pointer newval)
                lbl.lbl_size ~loc:e.exp_loc)
+    | Record_unboxed _ -> assert false
+    | Record_float -> set_arg_field (Psetfloatfield (lbl.lbl_pos, Assignment))
     end
   | Texp_array expr_list ->
       let kind = array_kind e in
@@ -1311,18 +1307,18 @@ and transl_record loc env fields repres opt_init_expr =
              let access_init access = Lprim(access, [Lvar init_id], loc) in
              let lam =
                match repres with
-               | Record_regular | Record_inlined _ -> access_init (Pfield i)
-               | Record_with_unboxed_fields (_, _, _) ->
+               | Record_regular | Record_inlined _
+               | Record_with_unboxed_fields (_, _, _)
+               | Record_extension ->
                  (* TODO: The following code unnecessarily creates a new
                     record. If flambda doesn't optimise it out, we can avoid it
                     by merging this with the code below (that destructs the
                     created record) *)
-                 let pos = compute_field_position desc.lbl_all i in
+                 let pos = Typeopt.adjusted_offset desc in
                  if not desc.lbl_unboxed then access_init (Pfield pos)
-                 else project_fields_into_a_record
+                 else Typeopt.project_fields_into_a_record
                         ~src_offset:pos ~src:(Lvar init_id) desc.lbl_size ~loc
                | Record_unboxed _ -> assert false
-               | Record_extension -> access_init (Pfield (i + 1))
                | Record_float -> access_init (Pfloatfield i)
              in
              lam, field_kind
@@ -1341,10 +1337,9 @@ and transl_record loc env fields repres opt_init_expr =
       try
         if mut = Mutable then raise Not_constant;
         let cl = List.fold_right2 (fun l desc cl ->
-          let unboxed = Builtin_attributes.has_unboxed desc.lbl_attributes in
           let c = extract_constant l in
           match c with
-          | Const_block (0, cl') when unboxed -> cl' @ cl
+          | Const_block (0, cl') when desc.lbl_unboxed -> cl' @ cl
           | _ -> c :: cl
         ) ll descs []
         in
@@ -1370,10 +1365,7 @@ and transl_record loc env fields repres opt_init_expr =
           let record_expr =
             let rec_field_init_exprs, rec_shape =
               List.fold_right2 (fun (field_id, desc) kind (init_exprs, shape) ->
-                let unboxed =
-                  Builtin_attributes.has_unboxed desc.lbl_attributes
-                in
-                if not unboxed then
+                if not desc.lbl_unboxed then
                   (Lvar field_id) :: init_exprs, kind :: shape
                 else begin
                   (* Inline every cell of an [@unboxed] field *)
@@ -1428,11 +1420,10 @@ and transl_record loc env fields repres opt_init_expr =
           Lsequence(Lprim(upd, [Lvar copy_id; transl_exp expr], loc), cont)
         in
         match repres with
-        | Record_regular
-        | Record_inlined _ ->
-          assign_expr (Psetfield (lbl.lbl_pos, maybe_pointer expr, Assignment))
-        | Record_with_unboxed_fields (_, _, _) ->
-          let pos = compute_field_position lbl.lbl_all lbl.lbl_pos in
+        | Record_regular | Record_inlined _
+        | Record_with_unboxed_fields (_, _, _)
+        | Record_extension ->
+          let pos = Typeopt.adjusted_offset lbl in
           if not lbl.lbl_unboxed then
             assign_expr (Psetfield (pos, maybe_pointer expr, Assignment))
           else
@@ -1444,9 +1435,6 @@ and transl_record loc env fields repres opt_init_expr =
         | Record_unboxed _ -> assert false
         | Record_float ->
           assign_expr (Psetfloatfield (lbl.lbl_pos, Assignment))
-        | Record_extension ->
-          assign_expr
-            (Psetfield (lbl.lbl_pos + 1, maybe_pointer expr, Assignment))
     in
     begin match opt_init_expr with
       None -> assert false

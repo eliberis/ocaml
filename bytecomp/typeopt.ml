@@ -174,16 +174,6 @@ let lazy_val_requires_forward env ty =
   | Any | Float | Lazy -> true
   | Addr | Int -> false
 
-(* TODO: If this function is called on every label in turn (it's the case most
-   of the time), computing position can be optimised to continue from the previous
-   result. *)
-and compute_field_position all_labels pos =
-  let acc = ref 0 in
-  Array.iteri (fun i def ->
-      if i < pos then acc := !acc + def.lbl_size
-  ) all_labels;
-  !acc
-
 let project_fields_into_a_record ?(src_offset=0) ~src:src_expr size ~loc =
   let src_expr_id = Ident.create "src_expr" in
   let fields = list_init size (fun i ->
@@ -207,3 +197,8 @@ let pointwise_block_copy ?(dst_offset=0) ?(src_offset=0) ~dst_id
     assignment_expr := Lsequence(!assignment_expr, copy_field i)
   done;
   Llet(Strict, Pgenval, src_expr_id, src_expr, !assignment_expr)
+
+let adjusted_offset lbl =
+  match lbl.lbl_repres with
+  | Record_extension -> lbl.lbl_offset + 1
+  | _ -> lbl.lbl_offset
