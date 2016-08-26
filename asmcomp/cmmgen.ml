@@ -719,8 +719,8 @@ let rec expr_size env = function
   | Uprim(Pmakearray(Pfloatarray, _), args, _) ->
       RHS_floatblock (List.length args)
   | Uprim (Pduprecord
-             ((Record_regular | Record_inlined _ | Record_with_unboxed_fields _),
-              sz), _, _) ->
+             ((Record_regular | Record_inlined _
+              | Record_with_unboxed_fields (_, _, _)), sz), _, _) ->
     RHS_block sz
   | Uprim (Pduprecord (Record_unboxed _, _), _, _) ->
       assert false

@@ -183,10 +183,56 @@ r.h <- (1, 1);
 assert (r.h = (1, 1))
 ;;
 
-(* TODO: 'Inlined' record unboxing *)
-(* type t23 = T of { i : int; j : point [@unboxed] }
- * ;;
- *
- * type t24 = U of { k : point [@unboxed]; l : int }
- *          | V of { m : int; n : point [@unboxed] }
- * ;; *)
+(* 'Inlined' record unboxing *)
+type t23 = T of { i : int; j : point [@unboxed] }
+;;
+
+let r = T { i = 0; j = { x = 0; y = 0; }; } in
+let match_test = function
+  | T { i; j = { x; y; }; } -> x = 0 && y = 0 && i = 0
+in
+assert (match_test r);
+assert (Obj.size (Obj.repr r) = 3);
+;;
+
+type t24 = U of { k : point [@unboxed]; l : int }
+         | V of { m : int; n : point [@unboxed] }
+;;
+
+let r1 = U { k = { x = 0; y = 0; }; l = 0; } in
+let r2 = V { m = 1; n = { x = 1; y = 1; }; } in
+let match_test = function
+  | U { k = { x; y; }; l; } -> x = 0 && y = 0 && l = 0
+  | V { m; n = { x; y; }; } -> x = 1 && y = 1 && m = 1
+in
+assert (match_test r1);
+assert (match_test r2);
+assert (Obj.size (Obj.repr r1) = 3);
+assert (Obj.size (Obj.repr r2) = 3);
+;;
+
+module M4 : sig (* Should be OK *)
+  type t = T of { e : point; f : point [@unboxed] }
+end = struct
+  type t = T of { e : point; f : point [@unboxed] }
+end
+;;
+
+module M5 : sig (* Should fail *)
+  type t = T of { e : point; f : point }
+end = struct
+  type t = T of { e : point; f : point [@unboxed] }
+end
+;;
+
+module M6 : sig (* Should fail *)
+  type t = T of { e : point; f : point [@unboxed] }
+end = struct
+  type t = T of { e : point; f : point }
+end
+;;
+
+(* Extension records (not supported yet) *)
+type t25 = ..;;
+type t25 += U of { o : point [@unboxed]; p : int; };;
+type t25 += V of { q : int; r : point [@unboxed] };;

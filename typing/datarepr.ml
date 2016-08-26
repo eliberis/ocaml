@@ -53,7 +53,7 @@ let constructor_existentials cd_args cd_res =
   let tyl =
     match cd_args with
     | Cstr_tuple l -> l
-    | Cstr_record l -> List.map (fun l -> l.ld_type) l
+    | Cstr_record (l, _) -> List.map (fun l -> l.ld_type) l
   in
   let existentials =
     match cd_res with
@@ -69,7 +69,7 @@ let constructor_args priv cd_args cd_res path rep =
   let tyl, existentials = constructor_existentials cd_args cd_res in
   match cd_args with
   | Cstr_tuple l -> existentials, l, None
-  | Cstr_record lbls ->
+  | Cstr_record (lbls, _) -> (* [rep] argument overrides the representation *)
       let arg_vars_set = free_vars ~param:true (newgenty (Ttuple tyl)) in
       let type_params = TypeSet.elements arg_vars_set in
       let type_unboxed =
@@ -112,22 +112,29 @@ let constructor_descrs ty_path decl cstrs =
           | Some ty_res' -> ty_res'
           | None -> ty_res
         in
-        let (tag, descr_rem) =
+        let (tag, representation, descr_rem) =
           match cd_args with
           | _ when decl.type_unboxed.unboxed ->
             assert (rem = []);
-            (Cstr_unboxed, [])
-          | Cstr_tuple [] -> (Cstr_constant idx_const,
-                   describe_constructors (idx_const+1) idx_nonconst rem)
-          | _  -> (Cstr_block idx_nonconst,
-                   describe_constructors idx_const (idx_nonconst+1) rem) in
+            (Cstr_unboxed, Record_unboxed true, [])
+          | Cstr_tuple [] ->
+            (Cstr_constant idx_const,
+             Record_inlined idx_nonconst,
+             describe_constructors (idx_const+1) idx_nonconst rem)
+          | Cstr_tuple (_::_) ->
+            (Cstr_block idx_nonconst,
+             Record_inlined idx_nonconst,
+             describe_constructors idx_const (idx_nonconst+1) rem)
+          | Cstr_record (_, repr) ->
+            begin match repr with
+            | Record_with_unboxed_fields (true, idx, _)
+            | Record_inlined idx -> assert (idx = idx_nonconst)
+            | _ -> assert false
+            end;
+            (Cstr_block idx_nonconst, repr,
+             describe_constructors idx_const (idx_nonconst+1) rem) in
         let cstr_name = Ident.name cd_id in
         let existentials, cstr_args, cstr_inlined =
-          let representation =
-            if decl.type_unboxed.unboxed
-            then Record_unboxed true
-            else Record_inlined idx_nonconst
-          in
           constructor_args decl.type_private cd_args cd_res
             (Path.Pdot (ty_path, cstr_name, Path.nopos)) representation
         in

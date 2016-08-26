@@ -508,7 +508,8 @@ let closed_type_decl decl =
             | None ->
                 match cd_args with
                 | Cstr_tuple l ->  List.iter closed_type l
-                | Cstr_record l -> List.iter (fun l -> closed_type l.ld_type) l
+                | Cstr_record (l, _) ->
+                  List.iter (fun l -> closed_type l.ld_type) l
           )
           v
     | Type_record(r, _rep) ->
@@ -2129,7 +2130,7 @@ and mcomp_variant_description type_pairs env xs ys =
       mcomp_type_option type_pairs env c1.cd_res c2.cd_res;
       begin match c1.cd_args, c2.cd_args with
       | Cstr_tuple l1, Cstr_tuple l2 -> mcomp_list type_pairs env l1 l2
-      | Cstr_record l1, Cstr_record l2 ->
+      | Cstr_record (l1, _), Cstr_record (l2, _) ->
           mcomp_record_description type_pairs env l1 l2
       | _ -> raise (Unify [])
       end;

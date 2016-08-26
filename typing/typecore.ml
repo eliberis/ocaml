@@ -774,8 +774,9 @@ module Label = NameChoice (struct
   let in_env lbl =
     match lbl.lbl_repres with
     | Record_regular | Record_float | Record_unboxed false
-    | Record_with_unboxed_fields _ -> true
-    | Record_unboxed true | Record_inlined _ | Record_extension -> false
+    | Record_with_unboxed_fields (false, _, _) -> true
+    | Record_unboxed true | Record_inlined _ | Record_extension
+    | Record_with_unboxed_fields (true, _, _) -> false
 end)
 
 let disambiguate_label_by_ids keep closed ids labels =

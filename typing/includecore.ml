@@ -157,7 +157,8 @@ let report_type_mismatch0 first second decl ppf err =
         (if b then second else first) decl
         (match repr with
         | Record_float-> "uses unboxed float representation"
-        | Record_with_unboxed_fields _ -> "has explicitly unboxed fields"
+        | Record_with_unboxed_fields (_, _, _) ->
+          "has explicitly unboxed fields"
         | _ -> assert false)
   | Unboxed_representation b ->
       pr "Their internal representations differ:@ %s %s %s"
@@ -171,6 +172,19 @@ let report_type_mismatch first second decl ppf =
       if err = Manifest then () else
       Format.fprintf ppf "@ %a." (report_type_mismatch0 first second decl) err)
 
+let compare_record_representation rep1 rep2 =
+  if rep1 = rep2 then []
+  else
+    let second_unboxed, repr =
+      match rep1, rep2 with
+      | (Record_float | Record_with_unboxed_fields (_, _, _)), _ ->
+        false, rep1
+      | _, (Record_float | Record_with_unboxed_fields (_, _, _)) ->
+        true, rep2
+      | _, _ -> assert false
+    in
+    [Record_representation (second_unboxed, repr)]
+
 let rec compare_constructor_arguments env cstr params1 params2 arg1 arg2 =
   match arg1, arg2 with
   | Types.Cstr_tuple arg1, Types.Cstr_tuple arg2 ->
@@ -179,8 +193,10 @@ let rec compare_constructor_arguments env cstr params1 params2 arg1 arg2 =
           (fun ty1 ty2 -> Ctype.equal env true (ty1::params1) (ty2::params2))
           (arg1) (arg2)
       then [] else [Field_type cstr]
-  | Types.Cstr_record l1, Types.Cstr_record l2 ->
-      compare_records env params1 params2 0 l1 l2
+  | Types.Cstr_record (l1, r1), Types.Cstr_record (l2, r2) ->
+    let err = compare_records env params1 params2 0 l1 l2 in
+    if err <> [] then err
+    else compare_record_representation r1 r2
   | _ -> [Field_type cstr]
 
 and compare_variants env params1 params2 n cstrs1 cstrs2 =
@@ -274,14 +290,8 @@ let type_declarations ?(equality = false) env name decl1 id decl2 =
     | (Type_record(labels1,rep1), Type_record(labels2,rep2)) ->
         let err = compare_records env decl1.type_params decl2.type_params
             1 labels1 labels2 in
-        if err <> [] || rep1 = rep2 then err else
-          let second_unboxed, repr =
-            match rep1, rep2 with
-            | (Record_float | Record_with_unboxed_fields _), _ -> false, rep1
-            | _, (Record_float | Record_with_unboxed_fields _) -> true, rep2
-            | _, _ -> assert false
-          in
-          [Record_representation (second_unboxed, repr)]
+        if err <> [] then err
+        else compare_record_representation rep1 rep2
     | (Type_open, Type_open) -> []
     | (_, _) -> [Kind]
   in

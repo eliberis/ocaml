@@ -1641,7 +1641,7 @@ let make_record_matching loc all_labels def = function
             match lbl.lbl_repres with
             | Record_regular | Record_inlined _ ->
               Lprim (Pfield lbl.lbl_pos, [arg], loc)
-            | Record_with_unboxed_fields _ ->
+            | Record_with_unboxed_fields (_, _, _) ->
               (* TODO: remove code duplication with translcore.ml, possibly don't
                  recompute position *)
               let pos = Typeopt.compute_field_position lbl.lbl_all lbl.lbl_pos in
@@ -1652,7 +1652,8 @@ let make_record_matching loc all_labels def = function
                   lbl.lbl_size ~loc
             | Record_unboxed _ -> arg
             | Record_float -> Lprim (Pfloatfield lbl.lbl_pos, [arg], loc)
-            | Record_extension -> Lprim (Pfield (lbl.lbl_pos + 1), [arg], loc)
+            | Record_extension ->
+              Lprim (Pfield (lbl.lbl_pos + 1), [arg], loc)
           in
           let str =
             match lbl.lbl_mut with

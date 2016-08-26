@@ -147,4 +147,50 @@ Error: Signature mismatch:
 #               - : unit = ()
 #         type t22 = { g : int; mutable h : int * int [@unboxed]; i : int; }
 #         - : unit = ()
-#     * * * * *   
+#       type t23 = T of { i : int; j : point [@unboxed]; }
+#               - : unit = ()
+#       type t24 =
+    U of { k : point [@unboxed]; l : int; }
+  | V of { m : int; n : point [@unboxed]; }
+#                       - : unit = ()
+#             module M4 : sig type t = T of { e : point; f : point [@unboxed]; } end
+#             Characters 82-144:
+  ......struct
+    type t = T of { e : point; f : point [@unboxed] }
+  end
+Error: Signature mismatch:
+       Modules do not match:
+         sig type t = T of { e : point; f : point [@unboxed]; } end
+       is not included in
+         sig type t = T of { e : point; f : point; } end
+       Type declarations do not match:
+         type t = T of { e : point; f : point [@unboxed]; }
+       is not included in
+         type t = T of { e : point; f : point; }
+       Their internal representations differ:
+       the first declaration has explicitly unboxed fields.
+#             Characters 93-144:
+  ......struct
+    type t = T of { e : point; f : point }
+  end
+Error: Signature mismatch:
+       Modules do not match:
+         sig type t = T of { e : point; f : point; } end
+       is not included in
+         sig type t = T of { e : point; f : point [@unboxed]; } end
+       Type declarations do not match:
+         type t = T of { e : point; f : point; }
+       is not included in
+         type t = T of { e : point; f : point [@unboxed]; }
+       Their internal representations differ:
+       the second declaration has explicitly unboxed fields.
+#     type t25 = ..
+# Characters 12-51:
+  type t25 += U of { o : point [@unboxed]; p : int; };;
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This type cannot be unboxed because it is an extension record.
+# Characters 12-50:
+  type t25 += V of { q : int; r : point [@unboxed] };;
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This type cannot be unboxed because it is an extension record.
+# 

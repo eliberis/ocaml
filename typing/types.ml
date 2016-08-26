@@ -164,9 +164,12 @@ and record_representation =
   | Record_unboxed of bool    (* Unboxed single-field record, inlined or not *)
   | Record_inlined of int               (* Inlined record *)
   | Record_extension                    (* Inlined record under extension *)
-  | Record_with_unboxed_fields of int   (* Some fields are 'inlined' into the
-                                           record block. The parameter gives the
-                                           total size of the record. *)
+  | Record_with_unboxed_fields of bool * int * int
+                                        (* Some fields are 'unboxed' into the
+                                           record block. The parameters are:
+                                            * whether it's inlined or not,
+                                            * the tag,
+                                            * the total size of the record. *)
 
 and label_declaration =
   {
@@ -191,7 +194,7 @@ and constructor_declaration =
 
 and constructor_arguments =
   | Cstr_tuple of type_expr list
-  | Cstr_record of label_declaration list
+  | Cstr_record of label_declaration list * record_representation
 
 and unboxed_status =
   {

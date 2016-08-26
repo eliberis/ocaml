@@ -896,7 +896,7 @@ and transl_exp0 e =
       begin match lbl.lbl_repres with
       | Record_regular | Record_inlined _ ->
         Lprim (Pfield lbl.lbl_pos, [targ], e.exp_loc)
-      | Record_with_unboxed_fields _ ->
+      | Record_with_unboxed_fields (_, _, _) ->
         let pos = compute_field_position lbl.lbl_all lbl.lbl_pos in
         if not lbl.lbl_unboxed then Lprim (Pfield pos, [targ], e.exp_loc)
         else Typeopt.project_fields_into_a_record
@@ -921,7 +921,7 @@ and transl_exp0 e =
     | Record_extension ->
       set_arg_field
         (Psetfield (lbl.lbl_pos + 1, maybe_pointer newval, Assignment))
-    | Record_with_unboxed_fields _ ->
+    | Record_with_unboxed_fields (_, _, _) ->
       let pos = Typeopt.compute_field_position lbl.lbl_all lbl.lbl_pos in
       if not lbl.lbl_unboxed then set_arg_field (Psetfield (pos, ptr, Assignment))
       else
@@ -1312,7 +1312,7 @@ and transl_record loc env fields repres opt_init_expr =
              let lam =
                match repres with
                | Record_regular | Record_inlined _ -> access_init (Pfield i)
-               | Record_with_unboxed_fields _ ->
+               | Record_with_unboxed_fields (_, _, _) ->
                  (* TODO: The following code unnecessarily creates a new
                     record. If flambda doesn't optimise it out, we can avoid it
                     by merging this with the code below (that destructs the
@@ -1349,9 +1349,9 @@ and transl_record loc env fields repres opt_init_expr =
         ) ll descs []
         in
         match repres with
-        | Record_regular | Record_with_unboxed_fields _ ->
-          Lconst(Const_block(0, cl))
-        | Record_inlined tag -> Lconst(Const_block(tag, cl))
+        | Record_regular -> Lconst(Const_block(0, cl))
+        | Record_inlined tag | Record_with_unboxed_fields (_, tag, _) ->
+          Lconst(Const_block(tag, cl))
         | Record_unboxed _ -> Lconst(match cl with [v] -> v | _ -> assert false)
         | Record_float ->
             Lconst(Const_float_array(List.map extract_float cl))
@@ -1361,7 +1361,7 @@ and transl_record loc env fields repres opt_init_expr =
         match repres with
         | Record_regular ->
           Lprim(Pmakeblock(0, mut, Some shape), ll, loc)
-        | Record_with_unboxed_fields _ ->
+        | Record_with_unboxed_fields (_, tag, _) ->
           (* Create unique identifiers for every record field for later
              binding *)
           let descs = List.map (fun desc ->
@@ -1388,7 +1388,7 @@ and transl_record loc env fields repres opt_init_expr =
                 end
               ) descs shape ([], [])
             in
-            Lprim(Pmakeblock(0, mut, Some rec_shape), rec_field_init_exprs, loc)
+            Lprim(Pmakeblock(tag, mut, Some rec_shape), rec_field_init_exprs, loc)
           in
           (* Bind all fields to preserve the order of evaluation *)
           List.fold_right2 (fun (field_id, _) field_expr in_expr ->
@@ -1431,7 +1431,7 @@ and transl_record loc env fields repres opt_init_expr =
         | Record_regular
         | Record_inlined _ ->
           assign_expr (Psetfield (lbl.lbl_pos, maybe_pointer expr, Assignment))
-        | Record_with_unboxed_fields _ ->
+        | Record_with_unboxed_fields (_, _, _) ->
           let pos = compute_field_position lbl.lbl_all lbl.lbl_pos in
           if not lbl.lbl_unboxed then
             assign_expr (Psetfield (pos, maybe_pointer expr, Assignment))

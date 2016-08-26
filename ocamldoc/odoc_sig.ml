@@ -250,7 +250,7 @@ module Analyser =
         inline_record = begin
           fun c -> match c.cd_args with
             | Cstr_tuple _ -> None
-            | Cstr_record r -> Some r
+            | Cstr_record (r, _) -> Some r
         end;
         inline_end = (fun c -> Loc.end_ c.cd_loc)
       }
@@ -379,7 +379,7 @@ module Analyser =
             let vc_args =
               match cd_args with
               | Cstr_tuple l -> Cstr_tuple (List.map (Odoc_env.subst_type env) l)
-              | Cstr_record l ->
+              | Cstr_record (l, _) ->
                   Cstr_record (List.map (get_field env name_comment_list) l)
             in
             {
@@ -772,7 +772,7 @@ module Analyser =
                 match types_ext.ext_args with
                 | Cstr_tuple l ->
                     Cstr_tuple (List.map (Odoc_env.subst_type new_env) l)
-                | Cstr_record l ->
+                | Cstr_record (l, _) ->
                     let docs = Record.(doc types ext_loc_end) l in
                     Cstr_record (List.map (get_field new_env docs) l)
               in
@@ -816,7 +816,7 @@ module Analyser =
               let pos_end = Loc.end_ types_ext.ext_loc in
               match types_ext.ext_args with
               | Cstr_tuple l -> Cstr_tuple (List.map (Odoc_env.subst_type env) l)
-              | Cstr_record l ->
+              | Cstr_record (l, _) ->
                   let docs = Record.(doc types) pos_end l in
                   Cstr_record (List.map (get_field env docs) l)
             in
