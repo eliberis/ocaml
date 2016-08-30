@@ -556,7 +556,6 @@ let check_recursive_lambda idlist lam =
 
 exception Not_constant
 
-(* TODO: or it can be an unboxed record of constants *)
 let extract_constant = function
     Lconst sc -> sc
   | _ -> raise Not_constant
@@ -894,9 +893,7 @@ and transl_exp0 e =
   | Texp_field(arg, _, lbl) ->
       let targ = transl_exp arg in
       begin match lbl.lbl_repres with
-      | Record_regular | Record_inlined _
-      | Record_with_unboxed_fields (_, _, _)
-      | Record_extension ->
+      | Record_regular _ ->
         let pos = Typeopt.adjusted_offset lbl in
         if not lbl.lbl_unboxed then
           Lprim (Pfield pos, [targ], e.exp_loc)
@@ -912,9 +909,7 @@ and transl_exp0 e =
     in
     let ptr = maybe_pointer newval in
     begin match lbl.lbl_repres with
-    | Record_regular | Record_inlined _
-    | Record_with_unboxed_fields (_, _, _)
-    | Record_extension ->
+    | Record_regular _ ->
       let pos = Typeopt.adjusted_offset lbl in
       if not lbl.lbl_unboxed then
         set_arg_field (Psetfield (pos, ptr, Assignment))
@@ -1307,13 +1302,11 @@ and transl_record loc env fields repres opt_init_expr =
              let access_init access = Lprim(access, [Lvar init_id], loc) in
              let lam =
                match repres with
-               | Record_regular | Record_inlined _
-               | Record_with_unboxed_fields (_, _, _)
-               | Record_extension ->
+               | Record_regular _ ->
                  (* TODO: The following code unnecessarily creates a new
-                    record. If flambda doesn't optimise it out, we can avoid it
-                    by merging this with the code below (that destructs the
-                    created record) *)
+                    record. Flambda optimises it out, but in general
+                    we can avoid it by merging this creation code with the
+                    code below (that destructs the created record) *)
                  let pos = Typeopt.adjusted_offset desc in
                  if not desc.lbl_unboxed then access_init (Pfield pos)
                  else Typeopt.project_fields_into_a_record
@@ -1344,62 +1337,73 @@ and transl_record loc env fields repres opt_init_expr =
         ) ll descs []
         in
         match repres with
-        | Record_regular -> Lconst(Const_block(0, cl))
-        | Record_inlined tag | Record_with_unboxed_fields (_, tag, _) ->
-          Lconst(Const_block(tag, cl))
+        | Record_regular { tag; inline; _; } ->
+          begin match inline with
+          | No_inline | Inlined -> Lconst(Const_block(tag, cl))
+          | Extension -> raise Not_constant
+          end
         | Record_unboxed _ -> Lconst(match cl with [v] -> v | _ -> assert false)
         | Record_float ->
             Lconst(Const_float_array(List.map extract_float cl))
-        | Record_extension ->
-            raise Not_constant
       with Not_constant ->
         match repres with
-        | Record_regular ->
-          Lprim(Pmakeblock(0, mut, Some shape), ll, loc)
-        | Record_with_unboxed_fields (_, tag, _) ->
-          (* Create unique identifiers for every record field for later
-             binding *)
-          let descs = List.map (fun desc ->
-            Ident.create ("field_" ^ desc.lbl_name), desc) descs
+        | Record_regular { tag; inline; has_unboxed_fields; _; } ->
+          let add_extension_slot_if_required ll shape =
+            match inline with
+            | Extension ->
+              let slot =
+                let path =
+                  let (label, _) = fields.(0) in
+                  match label.lbl_res.desc with
+                  | Tconstr(p, _, _) -> p
+                  | _ -> assert false
+                in
+                transl_path env path
+              in
+              slot :: ll, Pgenval :: shape
+            | No_inline | Inlined -> ll, shape
           in
-          let record_expr =
-            let rec_field_init_exprs, rec_shape =
-              List.fold_right2 (fun (field_id, desc) kind (init_exprs, shape) ->
-                if not desc.lbl_unboxed then
-                  (Lvar field_id) :: init_exprs, kind :: shape
-                else begin
-                  (* Inline every cell of an [@unboxed] field *)
-                  (* TODO: somewhat duplicated code here and in
-                     [project_fields_into_a_record] *)
-                  let field_accessors =
-                    list_init desc.lbl_size (fun i ->
-                      Lprim(Pfield i, [Lvar field_id], loc))
-                  in
-                  let kinds = list_init desc.lbl_size (fun _ -> Pgenval) in
-                  field_accessors @ init_exprs, kinds @ shape
-                end
-              ) descs shape ([], [])
-            in
-            Lprim(Pmakeblock(tag, mut, Some rec_shape), rec_field_init_exprs, loc)
-          in
-          (* Bind all fields to preserve the order of evaluation *)
-          List.fold_right2 (fun (field_id, _) field_expr in_expr ->
-            Llet(Strict, Pgenval, field_id, field_expr, in_expr))
-            descs ll record_expr
-        | Record_inlined tag ->
+          if not has_unboxed_fields then
+            (* Optimisation shortcut to avoid let-binding every field *)
+            let ll, shape = add_extension_slot_if_required ll shape in
             Lprim(Pmakeblock(tag, mut, Some shape), ll, loc)
+          else
+            let descs = List.map (fun desc ->
+              Ident.create ("field_" ^ desc.lbl_name), desc) descs
+            in
+            let record_expr =
+              let rec_field_init_exprs, rec_shape =
+                List.fold_right2
+                  (fun (field_id, desc) kind (init_exprs, shape) ->
+                     if not desc.lbl_unboxed then
+                       (Lvar field_id) :: init_exprs, kind :: shape
+                     else begin
+                       (* Inline every cell of an [@unboxed] field *)
+                       (* TODO: somewhat duplicated code here and in
+                          [project_fields_into_a_record] *)
+                       let field_accessors =
+                         list_init desc.lbl_size (fun i ->
+                           Lprim(Pfield i, [Lvar field_id], loc))
+                       in
+                       let kinds = list_init desc.lbl_size (fun _ -> Pgenval) in
+                       field_accessors @ init_exprs, kinds @ shape
+                     end
+                  ) descs shape ([], [])
+              in
+              let rec_field_init_exprs, rec_shape =
+                add_extension_slot_if_required
+                  rec_field_init_exprs rec_shape
+              in
+              Lprim(Pmakeblock(tag, mut, Some rec_shape),
+                    rec_field_init_exprs, loc)
+            in
+            (* Bind all fields to preserve the order of evaluation *)
+            List.fold_right2 (fun (field_id, _) field_expr in_expr ->
+              Llet(Strict, Pgenval, field_id, field_expr, in_expr))
+              descs ll record_expr
         | Record_unboxed _ -> (match ll with [v] -> v | _ -> assert false)
         | Record_float ->
             Lprim(Pmakearray (Pfloatarray, mut), ll, loc)
-        | Record_extension ->
-            let path =
-              let (label, _) = fields.(0) in
-              match label.lbl_res.desc with
-              | Tconstr(p, _, _) -> p
-              | _ -> assert false
-            in
-            let slot = transl_path env path in
-            Lprim(Pmakeblock(0, mut, Some (Pgenval :: shape)), slot :: ll, loc)
     in
     begin match opt_init_expr with
       None -> lam
@@ -1420,9 +1424,7 @@ and transl_record loc env fields repres opt_init_expr =
           Lsequence(Lprim(upd, [Lvar copy_id; transl_exp expr], loc), cont)
         in
         match repres with
-        | Record_regular | Record_inlined _
-        | Record_with_unboxed_fields (_, _, _)
-        | Record_extension ->
+        | Record_regular _ ->
           let pos = Typeopt.adjusted_offset lbl in
           if not lbl.lbl_unboxed then
             assign_expr (Psetfield (pos, maybe_pointer expr, Assignment))

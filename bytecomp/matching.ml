@@ -1639,9 +1639,7 @@ let make_record_matching loc all_labels def = function
           let lbl = all_labels.(pos) in
           let access =
             match lbl.lbl_repres with
-            | Record_regular | Record_inlined _
-            | Record_with_unboxed_fields (_, _, _)
-            | Record_extension ->
+            | Record_regular _ ->
               let pos = Typeopt.adjusted_offset lbl in
               (* TODO: remove code duplication with translcore.ml *)
               if not lbl.lbl_unboxed then Lprim (Pfield pos, [arg], loc)

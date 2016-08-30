@@ -232,7 +232,19 @@ end = struct
 end
 ;;
 
-(* Extension records (not supported yet) *)
+(* Extension records *)
 type t25 = ..;;
 type t25 += U of { o : point [@unboxed]; p : int; };;
 type t25 += V of { q : int; r : point [@unboxed] };;
+
+let r1 = U { o = { x = 0; y = 0; }; p = 0; } in
+let r2 = V { q = 1; r = { x = 1; y = 1; }; } in
+let match_test = function
+  | U { o = { x; y; }; p; } -> x = 0 && y = 0 && p = 0
+  | V { q; r = { x; y; }; } -> x = 1 && y = 1 && q = 1
+in
+assert (match_test r1);
+assert (match_test r2);
+assert (Obj.size (Obj.repr r1) = 4);
+assert (Obj.size (Obj.repr r2) = 4);
+;;

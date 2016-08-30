@@ -185,12 +185,7 @@ Error: Signature mismatch:
        Their internal representations differ:
        the second declaration has explicitly unboxed fields.
 #     type t25 = ..
-# Characters 12-51:
-  type t25 += U of { o : point [@unboxed]; p : int; };;
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This type cannot be unboxed because it is an extension record.
-# Characters 12-50:
-  type t25 += V of { q : int; r : point [@unboxed] };;
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This type cannot be unboxed because it is an extension record.
+# type t25 += U of { o : point [@unboxed]; p : int; }
+# type t25 += V of { q : int; r : point [@unboxed]; }
+#                       - : unit = ()
 # 

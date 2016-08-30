@@ -412,7 +412,7 @@ module Make(O : OBJ)(EVP : EVALPATH with type valu = O.t) = struct
                     | None ->
                         let pos =
                           match rep with
-                          | Record_extension -> 1
+                          | Record_regular { inline = Extension; _; } -> 1
                           | _ -> 0
                         in
                         let unbx =

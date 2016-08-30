@@ -773,10 +773,9 @@ module Label = NameChoice (struct
   let unbound_name_error = Typetexp.unbound_label_error
   let in_env lbl =
     match lbl.lbl_repres with
-    | Record_regular | Record_float | Record_unboxed false
-    | Record_with_unboxed_fields (false, _, _) -> true
-    | Record_unboxed true | Record_inlined _ | Record_extension
-    | Record_with_unboxed_fields (true, _, _) -> false
+    | Record_regular { inline; _ } -> inline = No_inline
+    | Record_float -> true
+    | Record_unboxed inlined -> not inlined
 end)
 
 let disambiguate_label_by_ids keep closed ids labels =

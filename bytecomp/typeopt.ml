@@ -200,5 +200,8 @@ let pointwise_block_copy ?(dst_offset=0) ?(src_offset=0) ~dst_id
 
 let adjusted_offset lbl =
   match lbl.lbl_repres with
-  | Record_extension -> lbl.lbl_offset + 1
-  | _ -> lbl.lbl_offset
+  | Record_regular { inline = Extension; _; } ->
+    lbl.lbl_offset + 1
+  | Record_regular _ ->
+    lbl.lbl_offset
+  | _ -> assert false

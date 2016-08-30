@@ -304,18 +304,17 @@ and type_kind =
   | Type_variant of constructor_declaration list
   | Type_open
 
+and record_inline_kind = No_inline | Inlined | Extension
+
 and record_representation =
-    Record_regular                      (* All fields are boxed / tagged *)
-  | Record_float                        (* All fields are floats *)
+  (* The usual record representation as a heap block, with extra properties *)
+  | Record_regular of { size : int;
+                        inline : record_inline_kind;
+                        tag : int;
+                        has_unboxed_fields : bool
+                      }
+  | Record_float              (* All fields are floats *)
   | Record_unboxed of bool    (* Unboxed single-field record, inlined or not *)
-  | Record_inlined of int               (* Inlined record *)
-  | Record_extension                    (* Inlined record under extension *)
-  | Record_with_unboxed_fields of bool * int * int
-                                        (* Some fields are 'unboxed' into the
-                                           record block. The parameters are:
-                                            * whether it's inlined or not,
-                                            * the tag,
-                                            * the total size of the record. *)
 
 and label_declaration =
   {
@@ -329,11 +328,19 @@ and label_declaration =
     ld_size : int;                      (* Width of the label type *)
   }
 
+and constructor_tag =
+    Cstr_constant of int                (* Constant constructor (an int) *)
+  | Cstr_block of int                   (* Regular constructor (a block) *)
+  | Cstr_unboxed                        (* Constructor of an unboxed type *)
+  | Cstr_extension of Path.t * bool     (* Extension constructor
+                                           true if a constant false if a block*)
+
 and constructor_declaration =
   {
     cd_id: Ident.t;
     cd_args: constructor_arguments;
     cd_res: type_expr option;
+    cd_tag: constructor_tag;
     cd_loc: Location.t;
     cd_attributes: Parsetree.attributes;
   }
@@ -357,6 +364,7 @@ type extension_constructor =
       ext_private: private_flag;
       ext_loc: Location.t;
       ext_attributes: Parsetree.attributes;
+      ext_tag: constructor_tag;
     }
 
 and type_transparence =
@@ -466,13 +474,6 @@ type constructor_description =
     cstr_attributes: Parsetree.attributes;
     cstr_inlined: type_declaration option;
    }
-
-and constructor_tag =
-    Cstr_constant of int                (* Constant constructor (an int) *)
-  | Cstr_block of int                   (* Regular constructor (a block) *)
-  | Cstr_unboxed                        (* Constructor of an unboxed type *)
-  | Cstr_extension of Path.t * bool     (* Extension constructor
-                                           true if a constant false if a block*)
 
 type label_description =
   { lbl_name: string;                   (* Short name *)

@@ -157,7 +157,7 @@ let report_type_mismatch0 first second decl ppf err =
         (if b then second else first) decl
         (match repr with
         | Record_float-> "uses unboxed float representation"
-        | Record_with_unboxed_fields (_, _, _) ->
+        | Record_regular { has_unboxed_fields = true; _; } ->
           "has explicitly unboxed fields"
         | _ -> assert false)
   | Unboxed_representation b ->
@@ -177,9 +177,9 @@ let compare_record_representation rep1 rep2 =
   else
     let second_unboxed, repr =
       match rep1, rep2 with
-      | (Record_float | Record_with_unboxed_fields (_, _, _)), _ ->
+      | (Record_float | Record_regular { has_unboxed_fields = true; _; }), _ ->
         false, rep1
-      | _, (Record_float | Record_with_unboxed_fields (_, _, _)) ->
+      | _, (Record_float | Record_regular { has_unboxed_fields = true; _; }) ->
         true, rep2
       | _, _ -> assert false
     in

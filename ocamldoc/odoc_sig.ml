@@ -407,7 +407,7 @@ module Analyser =
         {Types.ld_id; ld_mutable; ld_type=ld_type.Typedtree.ctyp_type;
          ld_loc; ld_attributes;
          ld_unboxed = Builtin_attributes.has_unboxed ld_attributes;
-         ld_size = 1; } in (* TODO: investigate *)
+         ld_size = -1; } in
       let open Typedtree in
       function
       | Cstr_tuple l ->
