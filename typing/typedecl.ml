@@ -141,11 +141,12 @@ let is_float env ty =
     Some {desc = Tconstr(p, _, _); _} -> Path.same p Predef.path_float
   | _ -> false
 
-(* Determine if a type is a record type, and if so, provide its field declarations
-   and representation. *)
+(* Determine if a type is a record type, and if so, provide its field
+   declarations and representation. *)
 
 type unboxable_type_info =
-  | Record of (Types.label_declaration list) * Types.record_representation
+  | Record of (Types.label_declaration list) * Types.block_representation
+  | Variant of (Types.constructor_declaration list) * Types.block_representation
   | Tuple
   | Not_unboxable
 
@@ -156,6 +157,7 @@ let get_unboxable_type_info env ty =
     let tydecl = Env.find_type p env in
     match tydecl.type_kind with
     | Type_record (decls, repr) -> Record (decls, repr)
+    | Type_variant (constrs, repr) -> Variant (constrs, repr)
     | _ -> Not_unboxable
     end
   | Ttuple _ -> Tuple
@@ -220,7 +222,7 @@ let make_params env params =
     List.map make_param params
 
 (* Computes the required block space for a type if it were to be unboxed. *)
-let get_unboxed_type_size env ty =
+let rec get_unboxed_type_size env ty =
   let ty = Ctype.repr (Ctype.expand_head_opt env ty) in
   match ty.desc with
   | Tconstr (p, _, _) ->
@@ -228,6 +230,14 @@ let get_unboxed_type_size env ty =
     begin match tydecl.type_kind with
     | Type_record (_, Record_regular { size; _; }) -> size
     | Type_record (decls, _) -> List.length decls
+    | Type_variant constrs ->
+      let sizes = List.map (fun cd ->
+        match cd.res with
+        | None -> 0 (* Constant constructor, no additional arguments *)
+        | Some ty -> get_unboxed_type_size env ty
+      ) constrs
+      in
+      1 + (Misc.list_max sizes)
     | _ -> 1
     end
   | Ttuple fields -> List.length fields
@@ -283,21 +293,30 @@ let check_suitable_for_unboxing env l =
                "it is not an unboxable type or it is recursive"))
     | Record (decls, repr) ->
       begin match repr with
-      | Record_unboxed _ ->
+      | Block_unboxed _ ->
         raise(Error (l.Types.ld_loc, Bad_unboxed_attribute
                 "it is already marked as unboxed in \
                  its type declaration"))
-      | Record_float ->
+      | Block_float ->
         raise(Error (l.Types.ld_loc, Bad_unboxed_attribute
                 "it has an optimised floating point representation"))
-      | Record_regular { inline; _; } when inline <> No_inline ->
+      | Block_regular { inline; _; } when inline <> No_inline ->
         assert false
-      | Record_regular _ ->
+      | Block_regular _ ->
         if List.exists (fun decl -> decl.Types.ld_mutable = Mutable) decls
         then
           raise (Error (l.Types.ld_loc, Bad_unboxed_attribute
                    "it has mutable fields"))
         else true
+      end
+    | Variant (cstrs, repr) ->
+      begin match repr with
+      | Block_unboxed _ ->
+        raise(Error (l.Types.ld_loc, Bad_unboxed_attribute
+                "it is already marked as unboxed in \
+                 its type declaration"))
+      | Block_regular { inline; _; } when inline <> No_inline ->
+        assert false
       end
     | Tuple -> true
   else false

@@ -198,6 +198,24 @@ let pointwise_block_copy ?(dst_offset=0) ?(src_offset=0) ~dst_id
   done;
   Llet(Strict, Pgenval, src_expr_id, src_expr, !assignment_expr)
 
+let create_unboxed_variant_block
+      ?(dst_offset=0) ?(src_offset=0)
+      ~dst_id ~tag ~src
+      ~ptr size ~loc =
+  let tag_lambda = Lconst (Const_base (Const_int tag)) in
+  let content_block_copy =
+    pointwise_block_copy
+      ~dst_offset:(dst_offset + 1)
+      ~src_offset ~dst_id ~src ~ptr
+      size ~loc
+  in
+  Lsequence (LPrim (PSetfield (dst_offset, ptr, Assignment),
+                    [Lvar dst_id; tag_lambda], loc),
+             content_block_copy)
+
+let project_into_a_variant ?(src_offset=0) ~max_tag ~src:src_expr size ~loc =
+
+
 let adjusted_offset lbl =
   match lbl.lbl_repres with
   | Record_regular { inline = Extension; _; } ->

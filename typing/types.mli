@@ -300,21 +300,21 @@ type type_declaration =
 
 and type_kind =
     Type_abstract
-  | Type_record of label_declaration list  * record_representation
-  | Type_variant of constructor_declaration list
+  | Type_record of label_declaration list * block_representation
+  | Type_variant of constructor_declaration list * block_representation
   | Type_open
 
 and record_inline_kind = No_inline | Inlined | Extension
 
-and record_representation =
+and block_representation =
   (* The usual record representation as a heap block, with extra properties *)
-  | Record_regular of { size : int;
-                        inline : record_inline_kind;
-                        tag : int;
-                        has_unboxed_fields : bool
-                      }
-  | Record_float              (* All fields are floats *)
-  | Record_unboxed of bool    (* Unboxed single-field record, inlined or not *)
+  | Block_regular of { size : int;
+                       inline : record_inline_kind;
+                       tag : int;
+                       has_unboxed_fields : bool
+                     }
+  | Block_float              (* All fields are floats *)
+  | Block_unboxed of bool    (* Unboxed single-field block, inlined or not *)
 
 and label_declaration =
   {
@@ -343,6 +343,7 @@ and constructor_declaration =
     cd_tag: constructor_tag;
     cd_loc: Location.t;
     cd_attributes: Parsetree.attributes;
+    cd_size: int;
   }
 
 and constructor_arguments =
@@ -473,7 +474,14 @@ type constructor_description =
     cstr_loc: Location.t;
     cstr_attributes: Parsetree.attributes;
     cstr_inlined: type_declaration option;
-   }
+  }
+
+type label_unbox_type =
+  | Not_unboxed  (* Unboxing for a field was not requested *)
+  | Simple       (* Field to be unboxed is a tuple or a record *)
+  | Variant      (* Field to be unboxed is a variant.
+                      The tag will be put into the first (additional)
+                      field of the unboxed representation *)
 
 type label_description =
   { lbl_name: string;                   (* Short name *)
@@ -486,7 +494,7 @@ type label_description =
     lbl_private: private_flag;          (* Read-only field? *)
     lbl_loc: Location.t;
     lbl_attributes: Parsetree.attributes;
-    lbl_unboxed : bool;                 (* Is this field inlined into the parent
+    lbl_unboxed : label_unbox_type;     (* Is this field 'unboxed' into the parent
                                            record? *)
     lbl_size: int;                      (* The size of a heap block required
                                            to represent this field *)

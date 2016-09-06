@@ -79,6 +79,9 @@ let list_init : 'a. int -> (int -> 'a) -> 'a list =
     for i = 0 to (n - 1) do l := (f i) :: !l done;
     List.rev !l
 
+(* For lists with non-negative elements *)
+let list_max = List.fold (fun old x -> max old x) 0
+
 module Stdlib = struct
   module List = struct
     type 'a t = 'a list
