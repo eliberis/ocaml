@@ -477,11 +477,13 @@ type constructor_description =
   }
 
 type label_unbox_type =
-  | Not_unboxed  (* Unboxing for a field was not requested *)
-  | Simple       (* Field to be unboxed is a tuple or a record *)
-  | Variant      (* Field to be unboxed is a variant.
+  | Not_unboxed    (* Unboxing for a field was not requested *)
+  | Simple         (* Field to be unboxed is a tuple or a record *)
+  | Variant of int (* Field to be unboxed is a variant.
                       The tag will be put into the first (additional)
-                      field of the unboxed representation *)
+                      field of the unboxed representation.
+                      Constructor argument is the max tag number that can
+                      appear in the block header. *)
 
 type label_description =
   { lbl_name: string;                   (* Short name *)

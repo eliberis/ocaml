@@ -214,7 +214,23 @@ let create_unboxed_variant_block
              content_block_copy)
 
 let project_into_a_variant ?(src_offset=0) ~max_tag ~src:src_expr size ~loc =
-
+  let src_expr_id = Ident.create "src_expr" in
+  let tag_expr = Lprim (Pfield src_offset, [Lvar src_expr_id], loc) in
+  let fields = Misc.list_init (size - 1) (fun i ->
+    Lprim (Pfield (src_offset + 1 + i), [Lvar src_expr_id], loc))
+  in
+  let shape = Misc.list_init (size - 1) (fun _ -> Pgenval) in
+  let makeblocks = Misc.list_init max_tag (fun i ->
+    (i, Lprim(Pmakeblock(0, Asttypes.Immutable, Some shape), fields, loc))
+  in
+  let switch = { sw_numconsts  = max_tag;
+                 sw_consts     = makeblocks;
+                 sw_numblocks  = 0;
+                 sw_blocks     = [];
+                 sw_failaction = None; }
+  in
+  Llet(Strict, Pgenval, src_expr_id, src_expr,
+       Lswitch(tag_expr, switch))
 
 let adjusted_offset lbl =
   match lbl.lbl_repres with
